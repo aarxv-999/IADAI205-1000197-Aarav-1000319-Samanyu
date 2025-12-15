@@ -23,3 +23,7 @@ To address this issue, our project aims to build an AI powered Cultural Tourism 
 - AI-Generated Recap Video: This creates a short summary of the trip with images, captions, and AI-generated text.
 - User Feedback Logistics: This feature will collect likes, dislikes, ratings, and user preferences so that future recommendations can be improved. 
 
+## Role Distribution
+
+- Aarav Agarwal: Focusing on UI/UX, frontend development, and documentation. Responsibilities include Streamlit UI design, user input forms, navigation structure, README.md, and overall documentation
+- Samanyu H: Focusing on Data & Backend Development. Responsibilities include dataset collection, cleaning & preprocessing, EDA, logic, feedback logging, and deployment support. 
