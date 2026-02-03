@@ -1,7 +1,7 @@
 import streamlit as st
 
 # -------------------------------------------------
-# APP CONFIGURATION
+# APP CONFIG
 # -------------------------------------------------
 st.set_page_config(
     page_title="AI Cultural Tourism Platform",
@@ -12,58 +12,66 @@ st.set_page_config(
 # HOME PAGE
 # -------------------------------------------------
 def home_page():
-    st.title("AI Cultural Tourism Platform")
-    st.write("Plan personalized cultural trips powered by AI.")
-    st.write("Use the sidebar to navigate through the application.")
+    st.title("🌍 AI-Powered Cultural Tourism Platform")
+    st.write(
+        """
+        Plan personalized cultural trips using AI.
+        
+        This platform generates:
+        - Personalized destinations
+        - Smart itineraries
+        - PDF travel plans
+        - Travel recap videos
+        - Multilingual AI chatbot assistance
+        """
+    )
 
 # -------------------------------------------------
-# PERSONALIZATION PAGE (MAIN AARAV UI WORK)
+# PERSONALIZATION PAGE
 # -------------------------------------------------
 def personalization_page():
-    st.title("Travel Personalization")
+    st.title("🧭 Travel Personalization")
     st.subheader("Tell us about your travel preferences")
 
-    age = st.slider("Select your age", 10, 80)
+    col1, col2 = st.columns(2)
 
-    interests = st.multiselect(
-        "Choose your interests",
-        ["Culture", "Adventure", "Nature", "Food", "History", "Beaches"]
-    )
+    with col1:
+        age = st.slider("Age", 10, 80)
+        interests = st.multiselect(
+            "Interests",
+            ["Culture", "Adventure", "Nature", "Food", "History", "Beaches"]
+        )
+        duration = st.selectbox("Trip Duration (days)", [3, 5, 7, 10])
 
-    duration = st.selectbox("Trip Duration (days)", [3, 5, 7, 10])
+    with col2:
+        season = st.selectbox(
+            "Preferred Season",
+            ["Summer", "Winter", "Spring", "Autumn"]
+        )
+        weather = st.selectbox(
+            "Preferred Weather",
+            ["Cold", "Moderate", "Hot"]
+        )
+        accessibility = st.checkbox("Accessibility needs")
+        language = st.selectbox(
+            "Preferred Language",
+            ["English", "Hindi", "French", "Japanese"]
+        )
 
-    season = st.selectbox(
-        "Preferred Travel Season",
-        ["Summer", "Winter", "Spring", "Autumn"]
-    )
+    if st.button("Generate Personalized Destinations"):
+        st.success("Showing AI-recommended destinations")
 
-    weather = st.selectbox(
-        "Preferred Weather",
-        ["Cold", "Moderate", "Hot"]
-    )
-
-    accessibility = st.checkbox("Accessibility needs")
-
-    language = st.selectbox(
-        "Preferred Language",
-        ["English", "Hindi", "French", "Japanese"]
-    )
-
-    if st.button("Generate Suggestions"):
-        st.info("Personalized destinations will appear here.")
-
-        st.subheader("Suggested Destinations")
-
-        # Placeholder results (backend will replace later)
-        sample_results = [
-            {"name": "Kyoto", "country": "Japan"},
-            {"name": "Paris", "country": "France"},
-            {"name": "Bali", "country": "Indonesia"}
+        # ---- BACKEND PLACEHOLDER ----
+        sample_destinations = [
+            {"name": "Kyoto", "country": "Japan", "type": "Culture"},
+            {"name": "Paris", "country": "France", "type": "History"},
+            {"name": "Bali", "country": "Indonesia", "type": "Nature"}
         ]
 
-        for place in sample_results:
-            st.write(f"### {place['name']} ({place['country']})")
-            st.write("AI‑generated description will appear here.")
+        for place in sample_destinations:
+            st.markdown(f"### {place['name']} ({place['country']})")
+            st.write(f"Experience Type: {place['type']}")
+            st.info("AI-generated description will appear here.")
 
             col1, col2 = st.columns(2)
             with col1:
@@ -75,36 +83,89 @@ def personalization_page():
 # ITINERARY PAGE
 # -------------------------------------------------
 def itinerary_page():
-    st.title("Itinerary Generator")
-    st.write("Your personalized day‑wise itinerary will appear here.")
+    st.title("📅 Personalized Itinerary")
+
+    st.write("Your AI-generated day-wise itinerary")
+
+    # ---- BACKEND PLACEHOLDER ----
+    itinerary = {
+        "Day 1": "Arrival, cultural walking tour, local cuisine",
+        "Day 2": "Museum visit, heritage site exploration",
+        "Day 3": "Nature excursion and relaxation"
+    }
+
+    for day, plan in itinerary.items():
+        with st.expander(day):
+            st.write(plan)
+            st.info("Weather & seasonal notes will appear here")
+
+    st.radio(
+        "Would you like to modify this itinerary?",
+        ["Yes", "No"]
+    )
 
 # -------------------------------------------------
-# RECOMMENDATIONS PAGE
+# SMART RECOMMENDATIONS PAGE
 # -------------------------------------------------
 def recommendations_page():
-    st.title("Smart Recommendations")
-    st.write("AI‑based similar destination suggestions will appear here.")
+    st.title("✨ Smart Recommendations")
+
+    st.write("Similar destinations you may like")
+
+    # ---- BACKEND PLACEHOLDER ----
+    recommendations = [
+        {"name": "Rome", "country": "Italy"},
+        {"name": "Istanbul", "country": "Turkey"},
+        {"name": "Athens", "country": "Greece"}
+    ]
+
+    for rec in recommendations:
+        st.markdown(f"### {rec['name']} ({rec['country']})")
+        st.write("AI-generated recommendation reason will appear here.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button(f"👍 Like {rec['name']}")
+        with col2:
+            st.button(f"👎 Dislike {rec['name']}")
 
 # -------------------------------------------------
-# PDF PAGE
+# PDF GENERATOR PAGE
 # -------------------------------------------------
 def pdf_page():
-    st.title("PDF Generator")
-    st.write("Download your travel itinerary as a PDF.")
+    st.title("📄 PDF Itinerary Generator")
+
+    st.write("Download your personalized travel itinerary")
+
+    st.info("PDF generation logic will be connected here")
+
+    st.button("Download Itinerary PDF")
 
 # -------------------------------------------------
-# VIDEO PAGE
+# VIDEO GENERATOR PAGE
 # -------------------------------------------------
 def video_page():
-    st.title("Travel Recap Video")
-    st.write("AI‑generated travel video will appear here.")
+    st.title("🎬 Travel Recap Video")
+
+    st.write("AI-generated video summary of your trip")
+
+    st.warning("Video preview will appear here once generated")
+
+    st.button("Generate Travel Video")
 
 # -------------------------------------------------
 # CHATBOT PAGE
 # -------------------------------------------------
 def chatbot_page():
-    st.title("Multilingual Chatbot")
-    st.write("Chat with the AI travel assistant here.")
+    st.title("💬 Multilingual Travel Chatbot")
+
+    st.write("Ask anything about your trip")
+
+    user_input = st.text_input("Type your question here")
+
+    if st.button("Send"):
+        st.success("AI Response:")
+        st.write("Gemini-generated response will appear here")
 
 # -------------------------------------------------
 # SIDEBAR NAVIGATION
