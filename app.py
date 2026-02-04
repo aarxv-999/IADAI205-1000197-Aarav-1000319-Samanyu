@@ -307,21 +307,21 @@ def gemini_translate(text, language):
     """Translate text using Gemini"""
     if language == "English" or not GEMINI_AVAILABLE:
         return text
-
+    
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        prompt = f"""Translate the following text to {language}. 
+        prompt = f"""Translate the following text to {language}.
 Only provide the translation, nothing else.
 
 Text to translate:
 {text}"""
-
+        
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.3,
-                max_output_tokens=500,
+                max_output_tokens=4000,
             )
         )
         
@@ -329,7 +329,7 @@ Text to translate:
             return response.text.strip()
         else:
             return text
-            
+        
     except Exception as e:
         st.warning(f"Translation failed: {str(e)}")
         return text
@@ -636,9 +636,9 @@ def recommendations_page():
             if lang != "English":
                 with st.spinner(f"Translating to {lang}..."):
                     translated = gemini_translate(row["description"], lang)
-                    st.write(translated)
+                    st.markdown(translated, unsafe_allow_html=True)
             else:
-                st.write(row["description"])
+                st.markdown(row["description"], unsafe_allow_html=True)
 
             st.write("**Was this recommendation helpful?**")
             col1, col2, col3 = st.columns([1, 1, 8])
@@ -697,7 +697,10 @@ def itinerary_page():
     if st.button("Generate Itinerary", type="primary", use_container_width=True, key="generate_itinerary_btn"):
         with st.spinner("Generating your personalized itinerary..."):
             itinerary = generate_itinerary(city_row['city'], city_row['country'], duration, user_input, city_row)
-            st.markdown(itinerary)
+            
+            # Display itinerary in a scrollable container with proper wrapping
+            with st.container(border=True):
+                st.markdown(itinerary, unsafe_allow_html=True)
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
