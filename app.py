@@ -307,21 +307,21 @@ def gemini_translate(text, language):
     """Translate text using Gemini"""
     if language == "English" or not GEMINI_AVAILABLE:
         return text
-    
+
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        prompt = f"""Translate the following text to {language}.
+        prompt = f"""Translate the following text to {language}. 
 Only provide the translation, nothing else.
 
 Text to translate:
 {text}"""
-        
+
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.3,
-                max_output_tokens=4000,
+                max_output_tokens=500,
             )
         )
         
@@ -329,7 +329,7 @@ Text to translate:
             return response.text.strip()
         else:
             return text
-        
+            
     except Exception as e:
         st.warning(f"Translation failed: {str(e)}")
         return text
@@ -636,9 +636,9 @@ def recommendations_page():
             if lang != "English":
                 with st.spinner(f"Translating to {lang}..."):
                     translated = gemini_translate(row["description"], lang)
-                    st.markdown(translated, unsafe_allow_html=True)
+                    st.write(translated)
             else:
-                st.markdown(row["description"], unsafe_allow_html=True)
+                st.write(row["description"])
 
             st.write("**Was this recommendation helpful?**")
             col1, col2, col3 = st.columns([1, 1, 8])
@@ -698,9 +698,18 @@ def itinerary_page():
         with st.spinner("Generating your personalized itinerary..."):
             itinerary = generate_itinerary(city_row['city'], city_row['country'], duration, user_input, city_row)
             
-            # Display itinerary in a scrollable container with proper wrapping
+            # Display itinerary in a scrollable container with full height
             with st.container(border=True):
-                st.markdown(itinerary, unsafe_allow_html=True)
+                st.markdown("### 📅 Your Personalized Itinerary")
+                st.markdown("---")
+                
+                # Use a large scrollable container to display the full itinerary
+                itinerary_container = st.container(height=None)  # No height limit to show full content
+                with itinerary_container:
+                    st.markdown(itinerary)
+                
+                st.markdown("---")
+                st.success("✅ Itinerary generated successfully!")
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
