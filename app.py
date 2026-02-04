@@ -98,11 +98,11 @@ def personalization_page():
         )
         
         budget = st.slider(
-            "Your Budget (USD per person)",
-            min_value=500,
-            max_value=10000,
-            value=3000,
-            step=100
+            "Your Budget (INR per person)",
+            min_value=40000,
+            max_value=800000,
+            value=250000,
+            step=5000
         )
     
     with col2:
@@ -122,9 +122,9 @@ def personalization_page():
         
         st.markdown("---")
         st.markdown("### Budget Summary")
-        st.info(f"💰 Your trip budget: **${budget:,}** for {trip_duration}")
+        st.info(f"💰 Your trip budget: **₹{budget:,}** for {trip_duration}")
         estimated_cost_per_day = budget / int(trip_duration.split()[0])
-        st.markdown(f"📊 Estimated daily budget: **${estimated_cost_per_day:,.0f}** per day")
+        st.markdown(f"📊 Estimated daily budget: **₹{estimated_cost_per_day:,.0f}** per day")
     
     st.markdown("---")
     
