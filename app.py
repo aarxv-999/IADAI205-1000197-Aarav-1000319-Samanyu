@@ -703,10 +703,8 @@ def itinerary_page():
                 st.markdown("### 📅 Your Personalized Itinerary")
                 st.markdown("---")
                 
-                # Use a large scrollable container to display the full itinerary
-                itinerary_container = st.container(height=None)  # No height limit to show full content
-                with itinerary_container:
-                    st.markdown(itinerary)
+                # Use a scrollable container to display the full itinerary
+                st.markdown(itinerary)
                 
                 st.markdown("---")
                 st.success("✅ Itinerary generated successfully!")
