@@ -90,10 +90,19 @@ def personalization_page():
             index=1
         )
         
-        preferred_season = st.selectbox(
-            "Preferred Season",
-            ["Summer", "Winter", "Spring", "Autumn"],
+        preferred_month = st.selectbox(
+            "Preferred Travel Month",
+            ["January", "February", "March", "April", "May", "June", 
+             "July", "August", "September", "October", "November", "December"],
             index=0
+        )
+        
+        budget = st.slider(
+            "Your Budget (USD per person)",
+            min_value=500,
+            max_value=10000,
+            value=3000,
+            step=100
         )
     
     with col2:
@@ -111,7 +120,11 @@ def personalization_page():
             index=0
         )
         
-        st.markdown("")
+        st.markdown("---")
+        st.markdown("### Budget Summary")
+        st.info(f"💰 Your trip budget: **${budget:,}** for {trip_duration}")
+        estimated_cost_per_day = budget / int(trip_duration.split()[0])
+        st.markdown(f"📊 Estimated daily budget: **${estimated_cost_per_day:,.0f}** per day")
     
     st.markdown("---")
     
