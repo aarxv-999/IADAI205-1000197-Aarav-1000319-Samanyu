@@ -359,7 +359,8 @@ def generate_itinerary(city, country, duration, user_input, city_row):
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        prompt = f"""Create a detailed {duration}-day itinerary for {city}, {country}.
+        prompt = f"""You MUST generate a COMPLETE and DETAILED {duration}-day itinerary for {city}, {country}. 
+DO NOT truncate or cut short the itinerary. Generate the FULL itinerary for ALL {duration} days.
 
 Traveler Profile:
 - Interest: {user_input['interest']}
@@ -373,27 +374,47 @@ City Information:
 - Culture Score: {city_row.get('culture_score', 0)}/10
 - Adventure Score: {city_row.get('adventure_score', 0)}/10
 - Nature Score: {city_row.get('nature_score', 0)}/10
+- Nature Score: {city_row.get('nature_score', 0)}/10
 
-Format the itinerary as:
-**Day 1 - [Theme]**
-- Morning: [Activity]
-- Lunch: [Place/Food]
-- Afternoon: [Activity]
-- Evening: [Activity/Dinner]
-- Tips: [Local insight]
+IMPORTANT: Include a brief introduction about the city and how it matches the traveler's interests, then provide detailed day-by-day activities.
 
-Continue for all {duration} days. Include practical tips, restaurant suggestions, and cultural insights."""
+Format each day as follows (INCLUDE ALL {duration} DAYS):
+**Day 1 - [Themed Title]**
+- Morning: [Detailed Activity with location]
+- Lunch: [Specific Restaurant/Cafe name and cuisine type]
+- Afternoon: [Detailed Activity with location]
+- Evening: [Detailed Activity/Dinner with restaurant suggestion]
+- Tips: [Practical local insights, best times to visit, cost info]
+
+**Day 2 - [Themed Title]**
+[Continue with same format...]
+
+Continue this format for ALL {duration} days. Be comprehensive and detailed. Include:
+1. Specific place names and attractions
+2. Estimated time for each activity
+3. Travel tips between locations
+4. Restaurant recommendations with cuisine types
+5. Budget considerations
+6. Cultural insights and etiquette tips
+7. Local transportation advice
+
+GENERATE THE COMPLETE ITINERARY - DO NOT CUT OFF OR ABBREVIATE."""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.8,
-                max_output_tokens=2000,
+                max_output_tokens=4000,
             )
         )
         
         if response and response.text:
-            return response.text.strip()
+            full_text = response.text.strip()
+            # Verify we got substantial content
+            if len(full_text) > 100:
+                return full_text
+            else:
+                return "Itinerary too short. Please try again."
         else:
             return "Unable to generate itinerary"
             
@@ -866,58 +887,58 @@ def itinerary_page():
         city_row = st.session_state.current_city
         user_input = st.session_state.current_user_input
         
+        st.markdown("### 📅 Your Personalized Itinerary")
+        st.success("✅ Itinerary generated successfully!")
+        
+        # Use a large container with proper scrolling
         with st.container(border=True):
-            st.markdown("### 📅 Your Personalized Itinerary")
-            st.markdown("---")
-            
-            # Use write instead of markdown for better text display
-            st.write(itinerary)
-            
-            st.markdown("---")
-            st.success("✅ Itinerary generated successfully!")
-            
-            # PDF Download Section
-            st.markdown("### 📥 Download Itinerary")
-            
-            pdf_language = st.selectbox(
-                "Select language for PDF:",
-                ["English", "Hindi", "Spanish", "French", "German"],
-                key="pdf_language_selector"
-            )
-            
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                if st.button("Generate PDF", type="secondary", use_container_width=True, key="generate_pdf_btn"):
-                    with st.spinner(f"Creating PDF in {pdf_language}..."):
-                        pdf_buffer = generate_itinerary_pdf(
-                            city_row['city'],
-                            city_row['country'],
-                            user_input['weather'],
-                            user_input['season'],
-                            itinerary,
-                            city_row,
-                            user_input,
-                            pdf_language
-                        )
-                        
-                        if pdf_buffer:
-                            st.session_state.pdf_buffer = pdf_buffer
-                            st.success("✅ PDF generated successfully!")
-                        else:
-                            st.error("❌ Failed to generate PDF. Please try again.")
-            
-            with col2:
-                if 'pdf_buffer' in st.session_state and st.session_state.pdf_buffer:
-                    st.download_button(
-                        label="⬇️ Download PDF",
-                        data=st.session_state.pdf_buffer,
-                        file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
-                        mime="application/pdf",
-                        use_container_width=True
+            # Display entire itinerary text without truncation
+            st.markdown(itinerary, unsafe_allow_html=True)
+        
+        st.markdown("")  # Spacing
+        
+        # PDF Download Section
+        st.markdown("### 📥 Download Itinerary")
+        
+        pdf_language = st.selectbox(
+            "Select language for PDF:",
+            ["English", "Hindi", "Spanish", "French", "German"],
+            key="pdf_language_selector"
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if st.button("Generate PDF", type="secondary", use_container_width=True, key="generate_pdf_btn"):
+                with st.spinner(f"Creating PDF in {pdf_language}..."):
+                    pdf_buffer = generate_itinerary_pdf(
+                        city_row['city'],
+                        city_row['country'],
+                        user_input['weather'],
+                        user_input['season'],
+                        itinerary,
+                        city_row,
+                        user_input,
+                        pdf_language
                     )
-                else:
-                    st.info("Generate PDF first to download")
+                    
+                    if pdf_buffer:
+                        st.session_state.pdf_buffer = pdf_buffer
+                        st.success("✅ PDF generated successfully!")
+                    else:
+                        st.error("❌ Failed to generate PDF. Please try again.")
+        
+        with col2:
+            if 'pdf_buffer' in st.session_state and st.session_state.pdf_buffer:
+                st.download_button(
+                    label="⬇️ Download PDF",
+                    data=st.session_state.pdf_buffer,
+                    file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            else:
+                st.info("Generate PDF first to download")
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
