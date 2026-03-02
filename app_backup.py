@@ -19,7 +19,6 @@ from io import BytesIO
 import requests
 from PIL import Image as PILImage
 import moviepy
-import moviepy.editor
 import tempfile
 import re
 
