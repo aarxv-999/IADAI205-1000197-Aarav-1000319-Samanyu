@@ -8,4 +8,4 @@ python-dotenv
 pyttsx3
 Pillow
 imageio
-image-ffmpeg
+imageio-ffmpeg
