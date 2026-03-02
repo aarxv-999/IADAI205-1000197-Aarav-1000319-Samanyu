@@ -678,13 +678,17 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     
                     # Add caption - use the improved caption from parsing
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
+                    
+                    # Create a subtitle box with better text wrapping
+                    # Use a narrower width for better text wrapping and visibility
                     caption = TextClip(
                         text=caption_text,
-                        font_size=28,
+                        font_size=24,
                         color="white",
-                        size=(1280, 720),
-                        method="caption"
-                    ).with_duration(duration_per_location).with_position(("center", "bottom"))
+                        size=(1000, None),  # Width for wrapping, height auto
+                        method="caption",
+                        font="Arial"
+                    ).with_duration(duration_per_location).with_position(("center", 600))
                     
                     # Composite caption on image
                     clip = CompositeVideoClip([clip, caption])
@@ -704,10 +708,11 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             # Add day header
             day_header = TextClip(
                 text=f"Day {day_data['day_num']} - {day_data['day_title']}",
-                font_size=48,
+                font_size=44,
                 color="yellow",
-                size=(1280, 720),
-                method="caption"
+                size=(1200, None),
+                method="caption",
+                font="Arial"
             ).with_duration(2).with_position(("center", "center"))
             
             day_header_video = CompositeVideoClip([
@@ -732,10 +737,11 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         # Add title slide
         title_slide = TextClip(
             text=f"Your {city}, {country} Adventure",
-            font_size=60,
+            font_size=56,
             color="white",
-            size=(1280, 720),
-            method="caption"
+            size=(1200, None),
+            method="caption",
+            font="Arial"
         ).with_duration(3).with_position(("center", "center"))
         
         title_slide_video = CompositeVideoClip([
