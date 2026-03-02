@@ -618,7 +618,7 @@ def create_subtitle_clip(text, duration, y_position=620):
     """Create a properly formatted subtitle clip"""
     try:
         subtitle = TextClip(
-            txt=text,
+            text=text,  # CHANGED FROM 'txt' to 'text'
             fontsize=24,
             font='Arial',
             color='white',
@@ -626,7 +626,7 @@ def create_subtitle_clip(text, duration, y_position=620):
             size=(1200, None),
             stroke_color='black',
             stroke_width=2
-        ).with_duration(duration).set_position(('center', y_position))
+        ).set_duration(duration).set_position(('center', y_position))
         
         return subtitle
     except Exception as e:
@@ -701,7 +701,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     frame = np.array(img)
                     st.write(f"      🎬 Frame shape: {frame.shape}")
                     
-                    base_clip = ImageClip(frame).with_duration(duration_per_location)
+                    base_clip = ImageClip(frame).set_duration(duration_per_location)
                     st.write(f"      ✅ ImageClip created")
                     
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
@@ -731,8 +731,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             video = concatenate_videoclips(image_clips)
             st.write(f"   ✅ Day video created")
             
+            # FIXED: Changed 'txt' to 'text'
             day_header = TextClip(
-                txt=f"Day {day_data['day_num']} - {day_data['day_title']}",
+                text=f"Day {day_data['day_num']} - {day_data['day_title']}",
                 fontsize=44,
                 font='Arial',
                 color='white',
@@ -740,9 +741,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 stroke_width=3,
                 method='caption',
                 size=(1100, None)
-            ).with_duration(2.5).set_position(('center', 'center'))
+            ).set_duration(2.5).set_position(('center', 'center'))
             
-            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).with_duration(2.5)
+            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
             day_header_video = CompositeVideoClip([day_header_bg, day_header])
             
             video = concatenate_videoclips([day_header_video, video])
@@ -758,8 +759,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         final_video = concatenate_videoclips(day_clips)
         st.write("✅ All days merged")
         
+        # FIXED: Changed 'txt' to 'text'
         title_text = TextClip(
-            txt=f"Your {city}, {country} Adventure",
+            text=f"Your {city}, {country} Adventure",
             fontsize=56,
             font='Arial',
             color='white',
@@ -767,18 +769,19 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             stroke_width=3,
             method='caption',
             size=(1100, None)
-        ).with_duration(3.5).set_position(('center', 300))
+        ).set_duration(3.5).set_position(('center', 300))
         
+        # FIXED: Changed 'txt' to 'text'
         subtitle_text = TextClip(
-            txt=f"A {user_input['interest']} Journey",
+            text=f"A {user_input['interest']} Journey",
             fontsize=28,
             font='Arial',
             color='lightblue',
             method='caption',
             size=(1100, None)
-        ).with_duration(3.5).set_position(('center', 400))
+        ).set_duration(3.5).set_position(('center', 400))
         
-        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).with_duration(3.5)
+        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
         title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
         
         final_video = concatenate_videoclips([title_slide_video, final_video])
