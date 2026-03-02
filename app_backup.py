@@ -728,7 +728,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             video = concatenate_videoclips(image_clips)
             st.write(f"   ✅ Day video created")
             
-		day_header = TextClip(
+day_header = TextClip(
 			text=f"Day {day_data['day_num']} - {day_data['day_title']}",
 			fontsize=44,
 			font='Arial',
