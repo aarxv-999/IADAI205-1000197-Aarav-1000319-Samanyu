@@ -7,4 +7,4 @@ firebase-admin
 python-dotenv
 pyttsx3
 moviepy
-
+Pillow
