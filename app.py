@@ -352,74 +352,82 @@ Text to translate:
         return text
 
 def generate_itinerary(city, country, duration, user_input, city_row):
-    """Generate detailed itinerary using Gemini"""
+    """Generate detailed itinerary using Gemini - using multi-call approach for full content"""
     if not GEMINI_AVAILABLE:
         return "Itinerary generation requires Gemini API"
     
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        prompt = f"""CRITICAL INSTRUCTION: YOU MUST GENERATE THE COMPLETE {duration}-DAY ITINERARY IN FULL.
-DO NOT STOP EARLY. DO NOT TRUNCATE. DO NOT ABBREVIATE.
-If you feel the response is getting long, KEEP WRITING ANYWAY until ALL {duration} days are complete.
-IGNORE LENGTH LIMITS and FINISH the entire itinerary no matter how long it takes.
+        # First call: Generate introduction and context
+        intro_prompt = f"""You are a travel itinerary expert. Write a 3-4 sentence introduction for a {duration}-day trip to {city}, {country}.
 
-You will write approximately 250-400 words per day. For {duration} days, expect to write 1500-3200+ words total.
-
-TRAVELER PROFILE:
+Explain how this destination matches the traveler's profile:
 - Interest: {user_input['interest']}
 - Budget Level: {user_input['budget']}
 - Season: {user_input['season']}
 - Weather Preference: {user_input['weather']}
 - Age: {user_input['age']}
 
-DESTINATION INFO:
-- City: {city}, {country}
-- Rating: {city_row.get('avg_rating', 0)}/5
-- Culture Score: {city_row.get('culture_score', 0)}/10
-- Adventure Score: {city_row.get('adventure_score', 0)}/10
-- Nature Score: {city_row.get('nature_score', 0)}/10
+Make it engaging and personalized. Only write the introduction, nothing else."""
 
-INSTRUCTIONS:
-1. Start with a 2-3 sentence introduction explaining how {city} matches the traveler's interests
-2. Create exactly {duration} day sections (Day 1 through Day {duration})
-3. For EACH day, include:
-   - **Day X - [Compelling Title]**
-   - Morning: [Specific activity with location name and details]
-   - Lunch: [Specific restaurant name, cuisine type, dish recommendations]
-   - Afternoon: [Specific activity with location name and estimated duration]
-   - Evening: [Specific activity/dinner with restaurant and dish suggestions]
-   - Tips: [Practical advice, costs, best times, transportation tips]
-
-4. Each day section should be 250-400 words
-5. Include specific place names, not generic descriptions
-6. Add estimated times for activities
-7. Include restaurant names and cuisine types
-8. Add budget considerations
-9. Add cultural insights and etiquette tips
-
-CRITICAL: CONTINUE WRITING ALL {duration} DAYS. DO NOT STOP AFTER DAY 3 OR 4.
-If the response is interrupted, remember: YOU MUST WRITE ALL {duration} DAYS COMPLETELY."""
-
-        response = model.generate_content(
-            prompt,
+        intro_response = model.generate_content(
+            intro_prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=8192,
+                max_output_tokens=300,
             )
         )
         
-        if response and response.text:
-            full_text = response.text.strip()
-            # Verify we got substantial content
-            if len(full_text) > 100:
-                return full_text
+        introduction = intro_response.text.strip() if intro_response and intro_response.text else ""
+        print(f"[v0] DEBUG: Introduction length: {len(introduction)} chars")
+        
+        # Second call: Generate each day separately to avoid truncation
+        full_itinerary = introduction + "\n\n"
+        
+        for day_num in range(1, duration + 1):
+            day_prompt = f"""Generate a DETAILED itinerary for Day {day_num} of a {duration}-day trip to {city}, {country}.
+
+Traveler Profile:
+- Interest: {user_input['interest']}
+- Budget: {user_input['budget']}
+- Season: {user_input['season']}
+
+Format your response EXACTLY as follows (include all sections):
+
+**Day {day_num} - [Compelling Title]**
+- Morning: [Specific activity with location name, 50-100 words]
+- Lunch: [Specific restaurant name, cuisine type, dish recommendations, 30-50 words]
+- Afternoon: [Specific activity with location name and estimated duration, 50-100 words]
+- Evening: [Specific activity/dinner with restaurant and suggestions, 50-100 words]
+- Tips: [Practical advice, costs, best times, transportation, 40-60 words]
+
+Write ONLY the day section above, nothing else. Be detailed and specific with place names, restaurant names, and activity details."""
+
+            day_response = model.generate_content(
+                day_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=1000,
+                )
+            )
+            
+            if day_response and day_response.text:
+                day_content = day_response.text.strip()
+                full_itinerary += day_content + "\n\n"
+                print(f"[v0] DEBUG: Day {day_num} length: {len(day_content)} chars")
             else:
-                return "Itinerary too short. Please try again."
+                print(f"[v0] DEBUG: Failed to generate Day {day_num}")
+        
+        print(f"[v0] DEBUG: FINAL itinerary total length: {len(full_itinerary)} characters")
+        
+        if len(full_itinerary) > 500:
+            return full_itinerary
         else:
-            return "Unable to generate itinerary"
+            return "Failed to generate complete itinerary. Please try again."
             
     except Exception as e:
+        print(f"[v0] DEBUG: Itinerary generation error: {str(e)}")
         st.error(f"Itinerary generation failed: {str(e)}")
         return "Error generating itinerary"
 
@@ -927,6 +935,9 @@ def itinerary_page():
             st.session_state.current_itinerary = itinerary
             st.session_state.current_city = city_row
             st.session_state.current_user_input = user_input
+            
+            # Display debug info
+            print(f"[v0] DISPLAY DEBUG: Stored itinerary length: {len(itinerary)} characters")
     
     # Display itinerary if available
     if 'current_itinerary' in st.session_state and st.session_state.current_itinerary:
@@ -940,6 +951,7 @@ def itinerary_page():
         # Display itinerary length info
         char_count = len(itinerary)
         st.caption(f"Itinerary length: {char_count:,} characters | Approx {char_count // 5} words")
+        print(f"[v0] DISPLAY DEBUG: Current itinerary length being displayed: {char_count} characters")
         
         # Use text_area for reliable display of long text without truncation
         st.text_area(
