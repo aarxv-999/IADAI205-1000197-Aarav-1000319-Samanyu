@@ -175,29 +175,35 @@ Make it engaging and personalized. Only write the introduction, nothing else."""
         full_itinerary = introduction + "\n\n"
 
         for day_num in range(1, duration + 1):
-            day_prompt = f"""Generate a DETAILED itinerary for Day {day_num} of a {duration}-day trip to {city}, {country}.
+            day_prompt = f"""Generate a complete and full itinerary for Day {day_num} of a {duration}-day trip to {city}, {country}.
 
 Traveler Profile:
 - Interest: {user_input['interest']}
 - Budget: {user_input['budget']}
 - Season: {user_input['season']}
 
-Format your response EXACTLY as follows (include all sections):
+You MUST write the COMPLETE itinerary for this day with ALL sections filled out. Do not truncate or cut off any content.
 
-**Day {day_num} - [Compelling Title]**
-- Morning: [Specific activity with location name, 50-100 words]
-- Lunch: [Specific restaurant name, cuisine type, dish recommendations, 30-50 words]
-- Afternoon: [Specific activity with location name and estimated duration, 50-100 words]
-- Evening: [Specific activity/dinner with restaurant and suggestions, 50-100 words]
-- Tips: [Practical advice, costs, best times, transportation, 40-60 words]
+Format exactly as:
+**Day {day_num} - [Unique, compelling title about the main activity]**
 
-Write ONLY the day section above, nothing else. Be detailed and specific with place names, restaurant names, and activity details."""
+Morning: [Start time] - Write 80-120 words describing the specific morning activity, exact location names, what to see/do, and why it's perfect for this traveler.
+
+Lunch: [Time] - Specify exact restaurant name, cuisine type, signature dishes to order, estimated cost, and why it matches the traveler's budget/interests.
+
+Afternoon: [Time] - Write 80-120 words with specific activity, exact location, duration, what to expect, photos/sights.
+
+Evening: [Time] - Describe dinner experience, restaurant name, cuisine, ambiance, and evening activity (show, walk, etc).
+
+Tips: Write practical advice including: best transportation method, estimated daily budget, what to bring, booking recommendations, avoid/crowds, local customs.
+
+IMPORTANT: You must complete this entire itinerary. Do not stop mid-sentence or leave any section incomplete. Every word must be included."""
 
             day_response = model.generate_content(
                 day_prompt,
                 generation_config=genai.types.GenerationConfig(
                     temperature=GEMINI_ITINERARY_TEMP,
-                    max_output_tokens=GEMINI_ITINERARY_TOKENS,
+                    max_output_tokens=min(2000, GEMINI_ITINERARY_TOKENS),
                 )
             )
 
