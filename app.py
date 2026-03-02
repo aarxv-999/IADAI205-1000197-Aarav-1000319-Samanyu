@@ -359,52 +359,53 @@ def generate_itinerary(city, country, duration, user_input, city_row):
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        prompt = f"""You MUST generate a COMPLETE and DETAILED {duration}-day itinerary for {city}, {country}. 
-DO NOT truncate or cut short the itinerary. Generate the FULL itinerary for ALL {duration} days.
+        prompt = f"""CRITICAL INSTRUCTION: YOU MUST GENERATE THE COMPLETE {duration}-DAY ITINERARY IN FULL.
+DO NOT STOP EARLY. DO NOT TRUNCATE. DO NOT ABBREVIATE.
+If you feel the response is getting long, KEEP WRITING ANYWAY until ALL {duration} days are complete.
+IGNORE LENGTH LIMITS and FINISH the entire itinerary no matter how long it takes.
 
-Traveler Profile:
+You will write approximately 250-400 words per day. For {duration} days, expect to write 1500-3200+ words total.
+
+TRAVELER PROFILE:
 - Interest: {user_input['interest']}
 - Budget Level: {user_input['budget']}
 - Season: {user_input['season']}
 - Weather Preference: {user_input['weather']}
 - Age: {user_input['age']}
 
-City Information:
+DESTINATION INFO:
+- City: {city}, {country}
 - Rating: {city_row.get('avg_rating', 0)}/5
 - Culture Score: {city_row.get('culture_score', 0)}/10
 - Adventure Score: {city_row.get('adventure_score', 0)}/10
 - Nature Score: {city_row.get('nature_score', 0)}/10
-- Nature Score: {city_row.get('nature_score', 0)}/10
 
-IMPORTANT: Include a brief introduction about the city and how it matches the traveler's interests, then provide detailed day-by-day activities.
+INSTRUCTIONS:
+1. Start with a 2-3 sentence introduction explaining how {city} matches the traveler's interests
+2. Create exactly {duration} day sections (Day 1 through Day {duration})
+3. For EACH day, include:
+   - **Day X - [Compelling Title]**
+   - Morning: [Specific activity with location name and details]
+   - Lunch: [Specific restaurant name, cuisine type, dish recommendations]
+   - Afternoon: [Specific activity with location name and estimated duration]
+   - Evening: [Specific activity/dinner with restaurant and dish suggestions]
+   - Tips: [Practical advice, costs, best times, transportation tips]
 
-Format each day as follows (INCLUDE ALL {duration} DAYS):
-**Day 1 - [Themed Title]**
-- Morning: [Detailed Activity with location]
-- Lunch: [Specific Restaurant/Cafe name and cuisine type]
-- Afternoon: [Detailed Activity with location]
-- Evening: [Detailed Activity/Dinner with restaurant suggestion]
-- Tips: [Practical local insights, best times to visit, cost info]
+4. Each day section should be 250-400 words
+5. Include specific place names, not generic descriptions
+6. Add estimated times for activities
+7. Include restaurant names and cuisine types
+8. Add budget considerations
+9. Add cultural insights and etiquette tips
 
-**Day 2 - [Themed Title]**
-[Continue with same format...]
-
-Continue this format for ALL {duration} days. Be comprehensive and detailed. Include:
-1. Specific place names and attractions
-2. Estimated time for each activity
-3. Travel tips between locations
-4. Restaurant recommendations with cuisine types
-5. Budget considerations
-6. Cultural insights and etiquette tips
-7. Local transportation advice
-
-GENERATE THE COMPLETE ITINERARY - DO NOT CUT OFF OR ABBREVIATE."""
+CRITICAL: CONTINUE WRITING ALL {duration} DAYS. DO NOT STOP AFTER DAY 3 OR 4.
+If the response is interrupted, remember: YOU MUST WRITE ALL {duration} DAYS COMPLETELY."""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.8,
-                max_output_tokens=4000,
+                temperature=0.7,
+                max_output_tokens=8192,
             )
         )
         
@@ -560,48 +561,94 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
         content.append(Paragraph("📋 Your Personalized Itinerary", heading_style))
         content.append(Spacer(1, 0.1*inch))
         
-        # Parse and format itinerary - preserve all text
+        # Parse and format itinerary line-by-line to prevent truncation
+        # Create many small Paragraph objects instead of few large ones
         itinerary_lines = itinerary_text.split('\n')
-        for line in itinerary_lines:
+        current_section = []
+        
+        for i, line in enumerate(itinerary_lines):
             stripped_line = line.strip()
             
             if not stripped_line:
-                # Add spacing for empty lines
-                content.append(Spacer(1, 0.05*inch))
+                # Empty line - add spacing
+                if current_section:
+                    for item in current_section:
+                        content.append(item)
+                    current_section = []
+                content.append(Spacer(1, 0.08*inch))
+                
             elif stripped_line.startswith('**Day'):
-                # Format day headers
-                day_text = stripped_line.replace('**', '')
-                content.append(Paragraph(f"<b>{day_text}</b>", heading_style))
-            elif stripped_line.startswith('-'):
-                # Format bullet points
-                bullet_text = stripped_line.lstrip('- ').replace('**', '')
+                # Day header - flush previous section and add new header
+                if current_section:
+                    for item in current_section:
+                        content.append(item)
+                    current_section = []
+                
+                content.append(Spacer(1, 0.15*inch))
+                day_text = stripped_line.replace('**', '').strip()
                 try:
-                    content.append(Paragraph(f"• {bullet_text}", normal_style))
-                except:
-                    # Fallback for problematic text
-                    content.append(Paragraph(bullet_text, normal_style))
+                    content.append(Paragraph(f"<b>{day_text}</b>", heading_style))
+                except Exception as ex:
+                    content.append(Paragraph(day_text, heading_style))
+                content.append(Spacer(1, 0.08*inch))
+                
+            elif stripped_line.startswith('-') or stripped_line.startswith('•'):
+                # Bullet point
+                bullet_text = stripped_line.lstrip('-• ').strip()
+                # Escape problematic characters
+                bullet_text = bullet_text.replace('**', '').replace('&', '&amp;')
+                try:
+                    para = Paragraph(f"• {bullet_text}", normal_style)
+                    current_section.append(para)
+                except Exception as ex:
+                    # If paragraph fails, add as escaped text
+                    escaped_text = bullet_text.replace('<', '&lt;').replace('>', '&gt;')
+                    try:
+                        para = Paragraph(f"• {escaped_text}", normal_style)
+                        current_section.append(para)
+                    except:
+                        pass
+                
             else:
-                # Regular text
-                try:
-                    content.append(Paragraph(stripped_line, normal_style))
-                except:
-                    # Fallback for text with special characters
-                    clean_text = stripped_line.replace('<', '&lt;').replace('>', '&gt;')
-                    content.append(Paragraph(clean_text, normal_style))
+                # Regular text line
+                text_clean = stripped_line.replace('**', '').replace('__', '').replace('_', '')
+                text_clean = text_clean.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                
+                if text_clean:  # Only add non-empty text
+                    try:
+                        para = Paragraph(text_clean, normal_style)
+                        current_section.append(para)
+                    except Exception as ex:
+                        # If paragraph fails due to special chars, skip
+                        pass
+        
+        # Flush any remaining content
+        if current_section:
+            for item in current_section:
+                content.append(item)
         
         content.append(Spacer(1, 0.2*inch))
         
         # Footer
         footer_text = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | Language: {language} | AI Cultural Tourism Engine"
-        content.append(Paragraph(footer_text, info_style))
+        try:
+            content.append(Paragraph(footer_text, info_style))
+        except:
+            pass
         
-        # Build PDF
-        doc.build(content)
-        pdf_buffer.seek(0)
-        return pdf_buffer
+        # Build PDF with error handling
+        try:
+            doc.build(content)
+            pdf_buffer.seek(0)
+            return pdf_buffer
+        except Exception as build_error:
+            st.error(f"PDF build error: {str(build_error)}")
+            return None
         
     except Exception as e:
         st.error(f"Error generating PDF: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 # =========================
@@ -890,10 +937,18 @@ def itinerary_page():
         st.markdown("### 📅 Your Personalized Itinerary")
         st.success("✅ Itinerary generated successfully!")
         
-        # Use a large container with proper scrolling
-        with st.container(border=True):
-            # Display entire itinerary text without truncation
-            st.markdown(itinerary, unsafe_allow_html=True)
+        # Display itinerary length info
+        char_count = len(itinerary)
+        st.caption(f"Itinerary length: {char_count:,} characters | Approx {char_count // 5} words")
+        
+        # Use text_area for reliable display of long text without truncation
+        st.text_area(
+            "Full Itinerary",
+            value=itinerary,
+            height=750,
+            disabled=True,
+            label_visibility="collapsed"
+        )
         
         st.markdown("")  # Spacing
         
