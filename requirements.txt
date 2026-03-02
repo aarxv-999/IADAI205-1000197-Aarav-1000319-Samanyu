@@ -7,5 +7,4 @@ firebase-admin
 python-dotenv
 pyttsx3
 moviepy
-espeak-ng
-libespeak-ng-dev
+
