@@ -39,10 +39,10 @@ def render_destination_card(index, row, user_input):
             # Description
             st.write(row["description"])
 
-            # Weather advice
+            # Weather advice - FIXED: Use .get() with fallback for missing 'climate' column
             weather_advice = gemini_weather_advice(
                 row["city"],
-                row["climate"],
+                row.get("climate", "Pleasant"),
                 user_input["season"],
                 user_input["interest"]
             )
