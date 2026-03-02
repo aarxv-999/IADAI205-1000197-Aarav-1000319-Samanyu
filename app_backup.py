@@ -18,7 +18,6 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import requests
 from PIL import Image as PILImage
-from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
 import tempfile
 import re
 
@@ -52,10 +51,6 @@ if 'current_city' not in st.session_state:
     st.session_state.current_city = None
 if 'current_user_input' not in st.session_state:
     st.session_state.current_user_input = None
-if 'video_buffer' not in st.session_state:
-    st.session_state.video_buffer = None
-if 'video_generated' not in st.session_state:
-    st.session_state.video_generated = False
 
 # -------------------------
 # Firebase setup
@@ -507,323 +502,6 @@ WRITE EVERYTHING IN FULL DETAIL. DO NOT SHORTEN OR ABBREVIATE. INCLUDE ALL {dura
         return f"Error in retry: {str(e)}"
 
 # =========================
-# VIDEO GENERATION FUNCTIONS
-# =========================
-
-def parse_itinerary_into_days(itinerary_text):
-    """Parse itinerary text into structured day data"""
-    days_data = []
-    
-    # Split by day markers
-    day_pattern = r'\*\*Day\s+(\d+)\s*-\s*([^*]+)\*\*'
-    day_matches = list(re.finditer(day_pattern, itinerary_text))
-    
-    for i, match in enumerate(day_matches):
-        day_num = match.group(1)
-        day_title = match.group(2).strip()
-        
-        # Get content until next day or end
-        start = match.end()
-        end = day_matches[i + 1].start() if i + 1 < len(day_matches) else len(itinerary_text)
-        day_content = itinerary_text[start:end]
-        
-        # Extract locations and descriptions
-        locations = []
-        
-        # Look for Morning, Lunch, Afternoon, Evening sections
-        time_periods = ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:']
-        
-        for period in time_periods:
-            if period in day_content:
-                start_idx = day_content.find(period)
-                # Find next period or end
-                next_period_idx = float('inf')
-                for next_period in time_periods:
-                    idx = day_content.find(next_period, start_idx + 1)
-                    if idx != -1:
-                        next_period_idx = min(next_period_idx, idx)
-                
-                if next_period_idx == float('inf'):
-                    next_period_idx = len(day_content)
-                
-                content = day_content[start_idx:next_period_idx].replace(period, '').strip()
-                
-                # Extract location name
-                sentences = content.split('.')
-                first_sentence = sentences[0].strip() if sentences else ''
-                
-                words = first_sentence.split()
-                location = ' '.join(words[:2]) if len(words) > 1 else (words[0] if words else period.replace(':', ''))
-                
-                # Create caption for video
-                caption = f"{period.replace(':', '')}: {location}"
-                
-                locations.append({
-                    'time_period': period.replace(':', ''),
-                    'location': location,
-                    'caption': caption,
-                    'description': content[:80] if len(content) > 80 else content
-                })
-        
-        days_data.append({
-            'day_num': day_num,
-            'day_title': day_title,
-            'locations': locations if locations else [{'time_period': 'All Day', 'location': day_title, 'description': 'Explore the day'}]
-        })
-    
-    return days_data
-
-def fetch_pexels_image(query, filename, page=1):
-    """Fetch image from Pexels API with pagination to avoid duplicates"""
-    try:
-        if not PEXELS_AVAILABLE:
-            return None
-        
-        pexels_key = st.secrets.get("PEXELS_API_KEY")
-        if not pexels_key:
-            return None
-        
-        headers = {"Authorization": pexels_key}
-        params = {"query": query, "per_page": 5, "page": page}
-        
-        response = requests.get("https://api.pexels.com/v1/search", headers=headers, params=params)
-        
-        if response.status_code != 200:
-            return None
-        
-        data = response.json()
-        
-        if not data.get("photos"):
-            return None
-        
-        # Get a random image from results to avoid duplicates
-        import random
-        photo = random.choice(data["photos"][:3])
-        image_url = photo["src"]["landscape"]
-        img_data = requests.get(image_url).content
-        
-        with open(filename, "wb") as f:
-            f.write(img_data)
-        
-        return filename
-        
-    except Exception as e:
-        return None
-
-
-def create_subtitle_clip(text, duration, y_position=620):
-    """
-    Create a properly formatted subtitle clip with better visibility
-    
-    Args:
-        text: The subtitle text
-        duration: How long to display
-        y_position: Vertical position (default near bottom)
-    
-    Returns:
-        TextClip with proper formatting
-    """
-    try:
-        # Create text clip with better formatting
-        subtitle = TextClip(
-            txt=text,
-            fontsize=24,
-            font='Arial',
-            color='white',
-            method='caption',
-            size=(1200, None),
-            stroke_color='black',
-            stroke_width=2
-        ).set_duration(duration).set_position(('center', y_position))
-        
-        return subtitle
-    except Exception as e:
-        st.warning(f"Error creating subtitle: {str(e)}")
-        return None
-
-
-def generate_itinerary_video(itinerary_text, city, country, user_input):
-    """Generate complete travel video from itinerary with improved subtitles"""
-    
-    if not PEXELS_AVAILABLE:
-        st.error("Pexels API not configured. Please add PEXELS_API_KEY to secrets.")
-        return None
-    
-    try:
-        # Parse itinerary
-        days_data = parse_itinerary_into_days(itinerary_text)
-        
-        if not days_data:
-            st.error("Could not parse itinerary. Please ensure it's properly formatted.")
-            return None
-        
-        # Create temporary directory
-        temp_dir = tempfile.mkdtemp()
-        st.info(f"📹 Generating video with {len(days_data)} days...")
-        
-        day_clips = []
-        progress_bar = st.progress(0)
-        
-        for day_idx, day_data in enumerate(days_data):
-            st.write(f"Processing **Day {day_data['day_num']}: {day_data['day_title']}**")
-            
-            locations = day_data['locations']
-            
-            # Calculate duration (3 seconds per location for better subtitle visibility)
-            duration_per_location = 3
-            
-            image_clips = []
-            
-            # Fetch and process images for each location
-            for loc_idx, location in enumerate(locations):
-                st.write(f"    🖼️ Fetching image for {location['location']}...")
-                
-                search_query = f"{location['location']} {city}"
-                image_file = os.path.join(temp_dir, f"day_{day_data['day_num']}_loc_{loc_idx}.jpg")
-                
-                # Try multiple pages to get different images
-                success = False
-                for page in range(1, 3):
-                    if fetch_pexels_image(search_query, image_file, page=page):
-                        success = True
-                        break
-                
-                if not success:
-                    st.warning(f"Could not fetch image for {location['location']}, using placeholder")
-                    # Create a simple placeholder
-                    placeholder = PILImage.new('RGB', (1280, 720), color=(70, 130, 180))
-                    placeholder.save(image_file)
-                
-                # Load image and create clip
-                try:
-                    img = PILImage.open(image_file)
-                    # Resize to standard video size
-                    img = img.resize((1280, 720))
-                    frame = np.array(img)
-                    
-                    # Create base image clip
-                    base_clip = ImageClip(frame).set_duration(duration_per_location)
-                    
-                    # Create subtitle with improved formatting
-                    caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
-                    
-                    # Create the subtitle clip with better positioning
-                    subtitle = create_subtitle_clip(caption_text, duration_per_location, y_position=620)
-                    
-                    if subtitle:
-                        # Composite the image and subtitle
-                        clip = CompositeVideoClip([base_clip, subtitle])
-                    else:
-                        clip = base_clip
-                    
-                    image_clips.append(clip)
-                    
-                except Exception as e:
-                    st.warning(f"Error processing image for {location['location']}: {str(e)}")
-                    continue
-            
-            if not image_clips:
-                st.warning(f"No images for Day {day_data['day_num']}, skipping")
-                continue
-            
-            # Concatenate all images for this day
-            video = concatenate_videoclips(image_clips)
-            
-            # Add day header with better formatting
-            day_header = TextClip(
-                txt=f"Day {day_data['day_num']} - {day_data['day_title']}",
-                fontsize=44,
-                font='Arial',
-                color='white',
-                stroke_color='darkblue',
-                stroke_width=3,
-                method='caption',
-                size=(1100, None)
-            ).set_duration(2.5).set_position(('center', 'center'))
-            
-            # Create background for day header
-            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
-            
-            day_header_video = CompositeVideoClip([day_header_bg, day_header])
-            
-            # Combine header with day video
-            video = concatenate_videoclips([day_header_video, video])
-            day_clips.append(video)
-            
-            progress_bar.progress((day_idx + 1) / len(days_data))
-        
-        if not day_clips:
-            st.error("No valid day clips were created. Please check your itinerary format.")
-            return None
-        
-        # Merge all days
-        st.write("📀 Merging all days...")
-        final_video = concatenate_videoclips(day_clips)
-        
-        # Add title slide with better formatting
-        title_text = TextClip(
-            txt=f"Your {city}, {country} Adventure",
-            fontsize=56,
-            font='Arial',
-            color='white',
-            stroke_color='gold',
-            stroke_width=3,
-            method='caption',
-            size=(1100, None)
-        ).set_duration(3.5).set_position(('center', 300))
-        
-        subtitle_text = TextClip(
-            txt=f"A {user_input['interest']} Journey",
-            fontsize=28,
-            font='Arial',
-            color='lightblue',
-            method='caption',
-            size=(1100, None)
-        ).set_duration(3.5).set_position(('center', 400))
-        
-        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
-        
-        title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
-        
-        final_video = concatenate_videoclips([title_slide_video, final_video])
-        
-        # Write to buffer
-        st.write("💾 Rendering video...")
-        output_buffer = BytesIO()
-        output_path = os.path.join(temp_dir, "output.mp4")
-        
-        final_video.write_videofile(
-            output_path,
-            fps=24,
-            codec="libx264",
-            audio=False,
-            verbose=False,
-            logger=None
-        )
-        
-        # Read file into buffer
-        with open(output_path, 'rb') as f:
-            output_buffer.write(f.read())
-        
-        output_buffer.seek(0)
-        
-        # Cleanup
-        try:
-            import shutil
-            shutil.rmtree(temp_dir)
-        except:
-            pass
-        
-        st.success("✅ Video generated successfully!")
-        return output_buffer
-        
-    except Exception as e:
-        st.error(f"Video generation error: {str(e)}")
-        import traceback
-        st.error(f"Details: {traceback.format_exc()}")
-        return None
-
-# =========================
 # FEEDBACK
 # =========================
 def save_feedback(city, feedback):
@@ -1073,7 +751,7 @@ def home_page():
         - **Generate Itineraries** - Receive day-wise travel plans crafted just for you
         - **Get Smart Recommendations** - Discover hidden gems similar to your interests
         - **Multilingual Support** - Chat with our AI in your preferred language
-        - **Create Travel Videos** - Generate beautiful travel recap videos with subtitles
+        - **Download as PDF** - Save your itineraries as professional PDFs
         - **Save Your Sessions** - All recommendations are securely stored
         
         **Ready to explore?** Go to Personalization to get started.
@@ -1086,7 +764,7 @@ def home_page():
         1. Go to **Personalization** to tell us about yourself
         2. Get **Recommendations** based on your profile
         3. Generate your personalized **Itinerary**
-        4. Create a **Travel Video** recap
+        4. Download as **PDF** or share
         5. Provide feedback to improve recommendations
         6. Chat with our **Chatbot** for more help
         """)
@@ -1099,7 +777,7 @@ def home_page():
             st.success(f"✅ Saved: {st.session_state.firebase_doc_id[:8]}...")
         
         st.markdown("---")
-        st.subheader("���� AI Status")
+        st.subheader("🤖 AI Status")
         if GEMINI_AVAILABLE:
             st.success("✅ Gemini API Connected")
         else:
@@ -1108,13 +786,8 @@ def home_page():
                 st.write(gemini_error_message)
         
         st.markdown("---")
-        st.subheader("🎥 Video Generation Status")
-        if PEXELS_AVAILABLE:
-            st.success("✅ Pexels API Connected")
-        else:
-            st.error("❌ Pexels API Unavailable")
-            with st.expander("Error Details"):
-                st.write(pexels_error_message)
+        st.subheader("📄 PDF Generation Status")
+        st.success("✅ PDF Export Available")
         
         st.markdown("---")
         st.subheader("🔥 Firebase Status")
@@ -1130,8 +803,7 @@ def home_page():
             st.session_state.session_id = str(uuid.uuid4())
             st.session_state.firebase_doc_id = None
             st.session_state.personalization_complete = False
-            st.session_state.video_generated = False
-            st.session_state.video_buffer = None
+            st.session_state.pdf_buffer = None
             st.rerun()
 
 def personalization_page():
@@ -1397,7 +1069,7 @@ def itinerary_page():
         with col2:
             if st.session_state.pdf_buffer:
                 st.download_button(
-                    label="⬇�� Download PDF",
+                    label="⬇️ Download PDF",
                     data=st.session_state.pdf_buffer,
                     file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
@@ -1405,92 +1077,6 @@ def itinerary_page():
                 )
             else:
                 st.info("Generate PDF first to download")
-
-def video_page():
-    """Video generation page"""
-    st.title("🎬 Travel Video Generator")
-    st.markdown("Create stunning travel recap videos from your itinerary!")
-    st.markdown("---")
-    
-    if st.session_state.current_itinerary is None:
-        st.info("📌 First, generate an itinerary in the **Itinerary** tab to create a video.")
-        return
-    
-    if not PEXELS_AVAILABLE:
-        st.error("❌ Pexels API not configured. Please add PEXELS_API_KEY to your Streamlit secrets.")
-        st.info("Get a free API key from: https://www.pexels.com/api/")
-        return
-    
-    st.success("✅ Your itinerary is ready to be converted into a video!")
-    
-    itinerary = st.session_state.current_itinerary
-    city_row = st.session_state.current_city
-    user_input = st.session_state.current_user_input
-    
-    st.markdown(f"### 📍 Creating Video for: {city_row['city']}, {city_row['country']}")
-    
-    st.markdown("""
-    **What this video will include:**
-    - 🎬 Title slide with destination name
-    - 📸 High-quality images from Pexels for each location
-    - 📝 Clear subtitles showing locations and times
-    - 🔤 Day-by-day breakdown with proper formatting
-    - 🎵 Professional MP4 format
-    
-    **Note:** Video generation takes a few minutes. Please be patient!
-    """)
-    
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        video_quality = st.selectbox(
-            "Video Quality",
-            ["Standard (720p, 24fps)", "High (1080p, 30fps)"],
-            index=0
-        )
-    
-    with col2:
-        st.info("⏱️ Estimated time: 5-15 minutes depending on duration")
-    
-    if st.button("🎬 Generate Travel Video", type="primary", use_container_width=True, key="gen_video_btn"):
-        with st.spinner("🎥 Creating your travel video... This may take a few minutes"):
-            video_buffer = generate_itinerary_video(
-                itinerary,
-                city_row['city'],
-                city_row['country'],
-                user_input
-            )
-            
-            if video_buffer:
-                st.session_state.video_buffer = video_buffer
-                st.session_state.video_generated = True
-                st.rerun()
-    
-    # Display video if available
-    if st.session_state.video_generated and st.session_state.video_buffer:
-        st.markdown("---")
-        st.markdown("### ✅ Your Video is Ready!")
-        
-        # Display video
-        st.video(st.session_state.video_buffer)
-        
-        # Download button
-        st.download_button(
-            label="⬇️ Download Video",
-            data=st.session_state.video_buffer,
-            file_name=f"{city_row['city']}_travel_video_{datetime.now().strftime('%Y%m%d')}.mp4",
-            mime="video/mp4",
-            use_container_width=True
-        )
-        
-        st.success("🎉 Your travel video is ready to share!")
-        st.markdown("""
-        **Share your video on:**
-        - 📱 Instagram Reels
-        - 📺 YouTube
-        - 📧 Email to friends and family
-        - 💬 Social Media
-        """)
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
@@ -1559,7 +1145,6 @@ pages = {
     "📝 Personalization": personalization_page,
     "⭐ Recommendations": recommendations_page,
     "📅 Itinerary": itinerary_page,
-    "🎬 Video": video_page,
     "💬 Chatbot": chatbot_page,
 }
 
@@ -1571,9 +1156,9 @@ st.sidebar.markdown("### About")
 st.sidebar.markdown("""
 **AI Cultural Tourism Platform**
 
-*Fully Integrated with Gemini AI, Firebase & Pexels*
+*Fully Integrated with Gemini AI & Firebase*
 
-This platform provides AI-powered cultural tourism recommendations with video generation capabilities.
+This platform provides AI-powered cultural tourism recommendations with PDF export capabilities.
 """)
 
 st.sidebar.markdown("---")
