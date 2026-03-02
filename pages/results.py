@@ -42,7 +42,7 @@ def render_destination_card(index, row, user_input):
             # Weather advice
             weather_advice = gemini_weather_advice(
                 row["city"],
-                row["climate"],
+                row.get("climate", "Pleasant"),
                 user_input["season"],
                 user_input["interest"]
             )
