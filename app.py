@@ -537,18 +537,36 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
         
         # Daily itinerary section
         content.append(Paragraph("📋 Your Personalized Itinerary", heading_style))
+        content.append(Spacer(1, 0.1*inch))
         
-        # Parse and format itinerary
+        # Parse and format itinerary - preserve all text
         itinerary_lines = itinerary_text.split('\n')
         for line in itinerary_lines:
-            if line.strip():
-                if line.startswith('**Day'):
-                    content.append(Paragraph(f"<b>{line.replace('**', '')}</b>", heading_style))
-                elif line.startswith('-'):
-                    formatted_line = line.lstrip('- ').replace('**', '')
-                    content.append(Paragraph(f"• {formatted_line}", normal_style))
-                else:
-                    content.append(Paragraph(line, normal_style))
+            stripped_line = line.strip()
+            
+            if not stripped_line:
+                # Add spacing for empty lines
+                content.append(Spacer(1, 0.05*inch))
+            elif stripped_line.startswith('**Day'):
+                # Format day headers
+                day_text = stripped_line.replace('**', '')
+                content.append(Paragraph(f"<b>{day_text}</b>", heading_style))
+            elif stripped_line.startswith('-'):
+                # Format bullet points
+                bullet_text = stripped_line.lstrip('- ').replace('**', '')
+                try:
+                    content.append(Paragraph(f"• {bullet_text}", normal_style))
+                except:
+                    # Fallback for problematic text
+                    content.append(Paragraph(bullet_text, normal_style))
+            else:
+                # Regular text
+                try:
+                    content.append(Paragraph(stripped_line, normal_style))
+                except:
+                    # Fallback for text with special characters
+                    clean_text = stripped_line.replace('<', '&lt;').replace('>', '&gt;')
+                    content.append(Paragraph(clean_text, normal_style))
         
         content.append(Spacer(1, 0.2*inch))
         
@@ -610,7 +628,7 @@ def home_page():
             st.success(f"✅ Saved: {st.session_state.firebase_doc_id[:8]}...")
         
         st.markdown("---")
-        st.subheader("🤖 AI Status")
+        st.subheader("��� AI Status")
         if GEMINI_AVAILABLE:
             st.success("✅ Gemini API Connected")
         else:
@@ -843,7 +861,7 @@ def itinerary_page():
             st.session_state.current_user_input = user_input
     
     # Display itinerary if available
-    if 'current_itinerary' in st.session_state:
+    if 'current_itinerary' in st.session_state and st.session_state.current_itinerary:
         itinerary = st.session_state.current_itinerary
         city_row = st.session_state.current_city
         user_input = st.session_state.current_user_input
@@ -852,9 +870,8 @@ def itinerary_page():
             st.markdown("### 📅 Your Personalized Itinerary")
             st.markdown("---")
             
-            # Use expander to show full itinerary text without cutoff
-            with st.expander("View Full Itinerary", expanded=True):
-                st.markdown(itinerary)
+            # Use write instead of markdown for better text display
+            st.write(itinerary)
             
             st.markdown("---")
             st.success("✅ Itinerary generated successfully!")
