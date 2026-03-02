@@ -685,9 +685,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                         text=caption_text,
                         font_size=24,
                         color="white",
-                        size=(1000, None),  # Width for wrapping, height auto
-                        method="caption",
-                        font="Arial"
+                        size=(1000, None)
                     ).with_duration(duration_per_location).with_position(("center", 600))
                     
                     # Composite caption on image
@@ -711,8 +709,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 font_size=44,
                 color="yellow",
                 size=(1200, None),
-                method="caption",
-                font="Arial"
+                method="caption"
             ).with_duration(2).with_position(("center", "center"))
             
             day_header_video = CompositeVideoClip([
@@ -740,8 +737,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             font_size=56,
             color="white",
             size=(1200, None),
-            method="caption",
-            font="Arial"
+            method="caption"
         ).with_duration(3).with_position(("center", "center"))
         
         title_slide_video = CompositeVideoClip([
