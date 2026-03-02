@@ -734,9 +734,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         final_video.write_videofile(
             output_path,
             fps=24,
-            codec="libx264",
-            verbose=False,
-            logger=None
+            codec="libx264"
         )
         
         # Read file into buffer
