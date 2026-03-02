@@ -680,7 +680,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 continue
             
             # Concatenate all images for this day
-            video = concatenate_videoclips(image_clips, method="compose")
+            video = concatenate_videoclips(image_clips)
             
             # Add day header
             day_header = TextClip(
@@ -708,7 +708,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         
         # Merge all days
         st.write("📀 Merging all days...")
-        final_video = concatenate_videoclips(day_clips, method="compose")
+        final_video = concatenate_videoclips(day_clips)
         
         # Add title slide
         title_slide = TextClip(
@@ -734,7 +734,8 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         final_video.write_videofile(
             output_path,
             fps=24,
-            codec="libx264"
+            codec="libx264",
+            audio=False
         )
         
         # Read file into buffer
