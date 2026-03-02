@@ -679,14 +679,15 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     # Add caption - use the improved caption from parsing
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
                     
-                    # Create a subtitle box with better text wrapping
-                    # Use a narrower width for better text wrapping and visibility
+                    # Create text clip without size constraint to let moviepy calculate proper size
                     caption = TextClip(
                         text=caption_text,
-                        font_size=24,
-                        color="white",
-                        size=(1000, None)
-                    ).with_duration(duration_per_location).with_position(("center", 600))
+                        font_size=20,
+                        color="white"
+                    )
+                    # Set duration and position after creation
+                    caption = caption.with_duration(duration_per_location)
+                    caption = caption.with_position(('center', 600))
                     
                     # Composite caption on image
                     clip = CompositeVideoClip([clip, caption])
@@ -706,11 +707,10 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             # Add day header
             day_header = TextClip(
                 text=f"Day {day_data['day_num']} - {day_data['day_title']}",
-                font_size=44,
-                color="yellow",
-                size=(1200, None),
-                method="caption"
-            ).with_duration(2).with_position(("center", "center"))
+                font_size=40,
+                color="yellow"
+            )
+            day_header = day_header.with_duration(2).with_position(("center", "center"))
             
             day_header_video = CompositeVideoClip([
                 ColorClip(size=(1280, 720), color=(0, 0, 0)).with_duration(2),
@@ -734,11 +734,10 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         # Add title slide
         title_slide = TextClip(
             text=f"Your {city}, {country} Adventure",
-            font_size=56,
-            color="white",
-            size=(1200, None),
-            method="caption"
-        ).with_duration(3).with_position(("center", "center"))
+            font_size=48,
+            color="white"
+        )
+        title_slide = title_slide.with_duration(3).with_position(("center", "center"))
         
         title_slide_video = CompositeVideoClip([
             ColorClip(size=(1280, 720), color=(25, 25, 112)).with_duration(3),
