@@ -39,10 +39,10 @@ def render_destination_card(index, row, user_input):
             # Description
             st.write(row["description"])
 
-            # Weather advice - FIXED: Use .get() with fallback for missing 'climate' column
+            # Weather advice
             weather_advice = gemini_weather_advice(
                 row["city"],
-                row.get("climate", "Pleasant"),
+                row["climate"],
                 user_input["season"],
                 user_input["interest"]
             )
@@ -65,10 +65,13 @@ def render_destination_card(index, row, user_input):
 
 def render_results_tabs(ranked_results, user_input, on_select_callback):
     """Render results with tabs for different views"""
+    # Limit to top 5 recommendations
+    top_results = ranked_results.head(5)
+    
     tab1, tab2 = st.tabs(["Card View", "Comparison Table"])
 
     with tab1:
-        for idx, (_, row) in enumerate(ranked_results.iterrows(), 1):
+        for idx, (_, row) in enumerate(top_results.iterrows(), 1):
             col_left, col_right = st.columns([5, 1])
 
             with col_left:
@@ -80,7 +83,7 @@ def render_results_tabs(ranked_results, user_input, on_select_callback):
 
     with tab2:
         # Table view
-        display_df = ranked_results[[
+        display_df = top_results[[
             "city",
             "country",
             "avg_rating",
