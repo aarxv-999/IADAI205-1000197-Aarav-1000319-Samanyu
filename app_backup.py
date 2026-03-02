@@ -549,14 +549,23 @@ def parse_itinerary_into_days(itinerary_text):
                 
                 content = day_content[start_idx:next_period_idx].replace(period, '').strip()
                 
-                # Extract location names (capitalize words after common patterns)
-                words = content.split()
-                location = ' '.join(words[:3]) if words else period.replace(':', '')
+                # Extract location name - look for specific location/place names
+                # Usually the first sentence contains the main location
+                sentences = content.split('.')
+                first_sentence = sentences[0].strip() if sentences else ''
+                
+                # Try to extract just the location name (usually first 2-5 words)
+                words = first_sentence.split()
+                location = ' '.join(words[:2]) if len(words) > 1 else (words[0] if words else period.replace(':', ''))
+                
+                # Create shorter caption for video (time period + location)
+                caption = f"{period.replace(':', '')}: {location}"
                 
                 locations.append({
                     'time_period': period.replace(':', ''),
                     'location': location,
-                    'description': content[:100] + "..." if len(content) > 100 else content
+                    'caption': caption,
+                    'description': content[:80] if len(content) > 80 else content
                 })
         
         days_data.append({
@@ -567,8 +576,8 @@ def parse_itinerary_into_days(itinerary_text):
     
     return days_data
 
-def fetch_pexels_image(query, filename):
-    """Fetch image from Pexels API"""
+def fetch_pexels_image(query, filename, page=1):
+    """Fetch image from Pexels API with pagination to avoid duplicates"""
     try:
         if not PEXELS_AVAILABLE:
             return None
@@ -578,7 +587,7 @@ def fetch_pexels_image(query, filename):
             return None
         
         headers = {"Authorization": pexels_key}
-        params = {"query": query, "per_page": 1}
+        params = {"query": query, "per_page": 5, "page": page}
         
         response = requests.get("https://api.pexels.com/v1/search", headers=headers, params=params)
         
@@ -590,7 +599,10 @@ def fetch_pexels_image(query, filename):
         if not data.get("photos"):
             return None
         
-        image_url = data["photos"][0]["src"]["landscape"]
+        # Get a random image from results to avoid duplicates
+        import random
+        photo = random.choice(data["photos"][:3])
+        image_url = photo["src"]["landscape"]
         img_data = requests.get(image_url).content
         
         with open(filename, "wb") as f:
@@ -642,7 +654,14 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 search_query = f"{location['location']} {city}"
                 image_file = os.path.join(temp_dir, f"day_{day_data['day_num']}_loc_{loc_idx}.jpg")
                 
-                if not fetch_pexels_image(search_query, image_file):
+                # Try multiple pages to get different images
+                success = False
+                for page in range(1, 3):
+                    if fetch_pexels_image(search_query, image_file, page=page):
+                        success = True
+                        break
+                
+                if not success:
                     st.warning(f"Could not fetch image for {location['location']}, using placeholder")
                     # Create a simple placeholder
                     placeholder = PILImage.new('RGB', (1280, 720), color=(70, 130, 180))
@@ -657,11 +676,11 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     
                     clip = ImageClip(frame).with_duration(duration_per_location)
                     
-                    # Add caption
-                    caption_text = f"{location['time_period']}: {location['location']}"
+                    # Add caption - use the improved caption from parsing
+                    caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
                     caption = TextClip(
                         text=caption_text,
-                        font_size=32,
+                        font_size=28,
                         color="white",
                         size=(1280, 720),
                         method="caption"
