@@ -4,7 +4,7 @@ Itinerary generation and display component
 
 import streamlit as st
 from modules.gemini_utils import generate_itinerary, gemini_translate
-from pdf_utils import generate_itinerary_pdf, create_pdf_filename
+from modules.pdf_utils import generate_itinerary_pdf, create_pdf_filename
 
 
 def render_itinerary_form(selected_city_row):
