@@ -18,7 +18,6 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import requests
 from PIL import Image as PILImage
-import pyttsx3
 from moviepy import *
 import tempfile
 import re
@@ -602,17 +601,7 @@ def fetch_pexels_image(query, filename):
     except Exception as e:
         return None
 
-def generate_audio(text, filename):
-    """Generate audio from text using pyttsx3"""
-    try:
-        engine = pyttsx3.init()
-        engine.setProperty('rate', 150)  # Slightly slower for clarity
-        engine.save_to_file(text, filename)
-        engine.runAndWait()
-        return filename
-    except Exception as e:
-        st.error(f"Audio generation error: {str(e)}")
-        return None
+
 
 def generate_itinerary_video(itinerary_text, city, country, user_input):
     """Generate complete travel video from itinerary"""
@@ -641,26 +630,8 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             
             locations = day_data['locations']
             
-            # Generate audio for the day
-            day_text = f"Day {day_data['day_num']}: {day_data['day_title']}. "
-            for loc in locations:
-                day_text += f"{loc['time_period']}: {loc['location']}. "
-            
-            audio_file = os.path.join(temp_dir, f"day_{day_data['day_num']}_audio.wav")
-            
-            st.write(f"  🎤 Generating audio...")
-            if not generate_audio(day_text, audio_file):
-                st.warning(f"Failed to generate audio for Day {day_data['day_num']}")
-                continue
-            
-            try:
-                audio = AudioFileClip(audio_file)
-            except Exception as e:
-                st.warning(f"Failed to load audio for Day {day_data['day_num']}: {str(e)}")
-                continue
-            
-            duration = audio.duration
-            duration_per_location = duration / len(locations)
+            # Calculate duration (2 seconds per location)
+            duration_per_location = 2
             
             image_clips = []
             
@@ -710,7 +681,6 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             
             # Concatenate all images for this day
             video = concatenate_videoclips(image_clips, method="compose")
-            video = video.set_audio(audio)
             
             # Add day header
             day_header = TextClip(
@@ -765,7 +735,6 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             output_path,
             fps=24,
             codec="libx264",
-            audio_codec="aac",
             verbose=False,
             logger=None
         )
