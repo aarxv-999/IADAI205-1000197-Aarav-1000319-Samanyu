@@ -1,6 +1,7 @@
 """
-Configuration and constants for the AI Cultural Tourism Engine
+Configuration and constants for the Tourism Engine app
 """
+
 import streamlit as st
 import uuid
 
@@ -8,7 +9,7 @@ import uuid
 # STREAMLIT PAGE CONFIG
 # =========================
 def setup_page_config():
-    """Setup Streamlit page configuration"""
+    """Configure Streamlit page settings"""
     st.set_page_config(
         page_title="AI Cultural Tourism Engine",
         layout="wide",
@@ -33,41 +34,61 @@ def initialize_session_state():
         'current_user_input': None,
     }
     
-    for key, default_value in session_defaults.items():
+    for key, value in session_defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = default_value
+            st.session_state[key] = value
 
 # =========================
-# CONSTANTS
+# GLOBAL FLAGS
 # =========================
-INTEREST_OPTIONS = [
-    "Culture & History",
-    "Adventure & Nature",
-    "Beach & Relaxation",
-    "Food & Culinary",
-    "Art & Museums",
-    "Shopping & Urban",
-    "Wellness & Spa",
-    "Photography"
-]
-
-BUDGET_LEVELS = ["Budget", "Mid-Range", "Luxury"]
-SEASONS = ["Spring", "Summer", "Autumn", "Winter"]
-WEATHER_PREFS = ["Cold", "Pleasant", "Warm"]
-AGE_GROUPS = ["18-25", "26-35", "36-50", "50+"]
+FIREBASE_AVAILABLE = False
+GEMINI_AVAILABLE = False
+GEMINI_ERROR_MESSAGE = ""
 
 # =========================
-# API KEYS & SECRETS
+# API CONFIGURATION
 # =========================
-def get_gemini_api_key():
-    """Get Gemini API key from secrets"""
-    if "GEMINI_API_KEY" in st.secrets:
-        return st.secrets["GEMINI_API_KEY"]
-    return None
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_WEATHER_TEMP = 0.7
+GEMINI_WEATHER_TOKENS = 200
+GEMINI_TRANSLATE_TEMP = 0.3
+GEMINI_TRANSLATE_TOKENS = 500
+GEMINI_ITINERARY_TEMP = 0.7
+GEMINI_ITINERARY_TOKENS = 1000
 
-def get_firebase_credentials():
-    """Get Firebase credentials from secrets"""
-    if "FIREBASE_CREDENTIALS" in st.secrets:
-        return dict(st.secrets["FIREBASE_CREDENTIALS"])
-    return None
+# =========================
+# DATA PATHS
+# =========================
+MASTER_DATA_PATH = "datasets/master_destinations.csv"
+PATTERNS_DATA_PATH = "datasets/user_preference_patterns.csv"
+FEEDBACK_DIR = "feedback"
+FEEDBACK_FILE = "feedback/feedback.csv"
 
+# =========================
+# WEIGHTS AND SCORING
+# =========================
+DEFAULT_WEIGHTS = {
+    "experience": 0.6,
+    "rating": 0.25,
+    "duration": 0.15
+}
+
+# =========================
+# AGE GROUPS
+# =========================
+AGE_GROUPS = {
+    (0, 25): "18-25",
+    (26, 35): "26-35",
+    (36, 45): "36-45",
+    (46, 55): "46-55",
+    (56, 150): "56+"
+}
+
+# =========================
+# WEATHER ICONS
+# =========================
+WEATHER_ICONS = {
+    "Cold": "❄️",
+    "Pleasant": "🌤️",
+    "Warm": "☀️"
+}
