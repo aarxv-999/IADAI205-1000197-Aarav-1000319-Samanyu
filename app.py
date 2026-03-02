@@ -9,6 +9,15 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 import uuid
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from io import BytesIO
+import requests
+from PIL import Image as PILImage
 
 # =========================
 # CONFIG
@@ -32,6 +41,8 @@ if 'show_itinerary_form' not in st.session_state:
     st.session_state.show_itinerary_form = False
 if 'personalization_complete' not in st.session_state:
     st.session_state.personalization_complete = False
+if 'pdf_buffer' not in st.session_state:
+    st.session_state.pdf_buffer = None
 
 # -------------------------
 # Firebase setup
@@ -425,6 +436,130 @@ def get_city_image(city):
     return f"https://picsum.photos/seed/{image_id}/800/500"
 
 # =========================
+# PDF GENERATION
+# =========================
+def create_weather_icon(weather_type):
+    """Return weather emoji based on type"""
+    weather_icons = {
+        "Cold": "❄️",
+        "Pleasant": "🌤️",
+        "Warm": "☀️"
+    }
+    return weather_icons.get(weather_type, "🌤️")
+
+def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_row, user_input, language="English"):
+    """Generate PDF from itinerary data using ReportLab"""
+    
+    try:
+        # Create PDF buffer
+        pdf_buffer = BytesIO()
+        doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        
+        # Define styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=28,
+            textColor=colors.HexColor('#1f4788'),
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#2d5aa6'),
+            spaceAfter=10,
+            spaceBefore=10,
+            fontName='Helvetica-Bold'
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=10,
+            alignment=TA_JUSTIFY,
+            spaceAfter=8,
+            leading=14
+        )
+        
+        info_style = ParagraphStyle(
+            'InfoText',
+            parent=styles['Normal'],
+            fontSize=9,
+            textColor=colors.HexColor('#555555'),
+            spaceAfter=6
+        )
+        
+        # Build PDF content
+        content = []
+        
+        # Title
+        title = Paragraph(f"🌍 {city}, {country}", title_style)
+        content.append(title)
+        content.append(Spacer(1, 0.2*inch))
+        
+        # Destination info section
+        weather_icon = create_weather_icon(weather)
+        info_data = [
+            ["📊 Destination Information", ""],
+            ["Location:", f"{city}, {country}"],
+            ["Weather:", f"{weather_icon} {weather}"],
+            ["Season:", f"🗓️ {season}"],
+            ["Rating:", f"⭐ {city_row['avg_rating']}/5.0"],
+            ["Match Score:", f"🎯 {city_row['final_score']:.2f}"],
+            ["Ideal Duration:", f"📅 {city_row['ideal_duration_days']} days"],
+            ["Budget Level:", f"💰 {user_input['budget']}"],
+        ]
+        
+        info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+        info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#e8f0f8')),
+            ('TEXTCOLOR', (0, 0), (1, 0), colors.HexColor('#1f4788')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]))
+        content.append(info_table)
+        content.append(Spacer(1, 0.3*inch))
+        
+        # Daily itinerary section
+        content.append(Paragraph("📋 Your Personalized Itinerary", heading_style))
+        
+        # Parse and format itinerary
+        itinerary_lines = itinerary_text.split('\n')
+        for line in itinerary_lines:
+            if line.strip():
+                if line.startswith('**Day'):
+                    content.append(Paragraph(f"<b>{line.replace('**', '')}</b>", heading_style))
+                elif line.startswith('-'):
+                    formatted_line = line.lstrip('- ').replace('**', '')
+                    content.append(Paragraph(f"• {formatted_line}", normal_style))
+                else:
+                    content.append(Paragraph(line, normal_style))
+        
+        content.append(Spacer(1, 0.2*inch))
+        
+        # Footer
+        footer_text = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | Language: {language} | AI Cultural Tourism Engine"
+        content.append(Paragraph(footer_text, info_style))
+        
+        # Build PDF
+        doc.build(content)
+        pdf_buffer.seek(0)
+        return pdf_buffer
+        
+    except Exception as e:
+        st.error(f"Error generating PDF: {str(e)}")
+        return None
+
+# =========================
 # PAGE FUNCTIONS
 # =========================
 
@@ -708,6 +843,45 @@ def itinerary_page():
                 
                 st.markdown("---")
                 st.success("✅ Itinerary generated successfully!")
+                
+                # PDF Download Section
+                st.markdown("### 📥 Download Itinerary")
+                
+                pdf_language = st.selectbox(
+                    "Select language for PDF:",
+                    ["English", "Hindi", "Spanish", "French", "German"],
+                    key="pdf_language_selector"
+                )
+                
+                col1, col2 = st.columns([1, 1])
+                
+                with col1:
+                    if st.button("Generate PDF", type="secondary", use_container_width=True, key="generate_pdf_btn"):
+                        with st.spinner(f"Creating PDF in {pdf_language}..."):
+                            pdf_buffer = generate_itinerary_pdf(
+                                city_row['city'],
+                                city_row['country'],
+                                user_input['weather'],
+                                user_input['season'],
+                                itinerary,
+                                city_row,
+                                user_input,
+                                pdf_language
+                            )
+                            
+                            if pdf_buffer:
+                                st.session_state.pdf_buffer = pdf_buffer
+                                st.success("✅ PDF generated successfully!")
+                
+                with col2:
+                    if 'pdf_buffer' in st.session_state and st.session_state.pdf_buffer:
+                        st.download_button(
+                            label="⬇️ Download PDF",
+                            data=st.session_state.pdf_buffer,
+                            file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
