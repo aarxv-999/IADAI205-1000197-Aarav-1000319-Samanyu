@@ -43,6 +43,12 @@ if 'personalization_complete' not in st.session_state:
     st.session_state.personalization_complete = False
 if 'pdf_buffer' not in st.session_state:
     st.session_state.pdf_buffer = None
+if 'current_itinerary' not in st.session_state:
+    st.session_state.current_itinerary = None
+if 'current_city' not in st.session_state:
+    st.session_state.current_city = None
+if 'current_user_input' not in st.session_state:
+    st.session_state.current_user_input = None
 
 # -------------------------
 # Firebase setup
@@ -832,56 +838,69 @@ def itinerary_page():
     if st.button("Generate Itinerary", type="primary", use_container_width=True, key="generate_itinerary_btn"):
         with st.spinner("Generating your personalized itinerary..."):
             itinerary = generate_itinerary(city_row['city'], city_row['country'], duration, user_input, city_row)
+            st.session_state.current_itinerary = itinerary
+            st.session_state.current_city = city_row
+            st.session_state.current_user_input = user_input
+    
+    # Display itinerary if available
+    if 'current_itinerary' in st.session_state:
+        itinerary = st.session_state.current_itinerary
+        city_row = st.session_state.current_city
+        user_input = st.session_state.current_user_input
+        
+        with st.container(border=True):
+            st.markdown("### 📅 Your Personalized Itinerary")
+            st.markdown("---")
             
-            # Display itinerary in a scrollable container with full height
-            with st.container(border=True):
-                st.markdown("### 📅 Your Personalized Itinerary")
-                st.markdown("---")
-                
-                # Use a scrollable container to display the full itinerary
+            # Use expander to show full itinerary text without cutoff
+            with st.expander("View Full Itinerary", expanded=True):
                 st.markdown(itinerary)
-                
-                st.markdown("---")
-                st.success("✅ Itinerary generated successfully!")
-                
-                # PDF Download Section
-                st.markdown("### 📥 Download Itinerary")
-                
-                pdf_language = st.selectbox(
-                    "Select language for PDF:",
-                    ["English", "Hindi", "Spanish", "French", "German"],
-                    key="pdf_language_selector"
-                )
-                
-                col1, col2 = st.columns([1, 1])
-                
-                with col1:
-                    if st.button("Generate PDF", type="secondary", use_container_width=True, key="generate_pdf_btn"):
-                        with st.spinner(f"Creating PDF in {pdf_language}..."):
-                            pdf_buffer = generate_itinerary_pdf(
-                                city_row['city'],
-                                city_row['country'],
-                                user_input['weather'],
-                                user_input['season'],
-                                itinerary,
-                                city_row,
-                                user_input,
-                                pdf_language
-                            )
-                            
-                            if pdf_buffer:
-                                st.session_state.pdf_buffer = pdf_buffer
-                                st.success("✅ PDF generated successfully!")
-                
-                with col2:
-                    if 'pdf_buffer' in st.session_state and st.session_state.pdf_buffer:
-                        st.download_button(
-                            label="⬇️ Download PDF",
-                            data=st.session_state.pdf_buffer,
-                            file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
+            
+            st.markdown("---")
+            st.success("✅ Itinerary generated successfully!")
+            
+            # PDF Download Section
+            st.markdown("### 📥 Download Itinerary")
+            
+            pdf_language = st.selectbox(
+                "Select language for PDF:",
+                ["English", "Hindi", "Spanish", "French", "German"],
+                key="pdf_language_selector"
+            )
+            
+            col1, col2 = st.columns([1, 1])
+            
+            with col1:
+                if st.button("Generate PDF", type="secondary", use_container_width=True, key="generate_pdf_btn"):
+                    with st.spinner(f"Creating PDF in {pdf_language}..."):
+                        pdf_buffer = generate_itinerary_pdf(
+                            city_row['city'],
+                            city_row['country'],
+                            user_input['weather'],
+                            user_input['season'],
+                            itinerary,
+                            city_row,
+                            user_input,
+                            pdf_language
                         )
+                        
+                        if pdf_buffer:
+                            st.session_state.pdf_buffer = pdf_buffer
+                            st.success("✅ PDF generated successfully!")
+                        else:
+                            st.error("❌ Failed to generate PDF. Please try again.")
+            
+            with col2:
+                if 'pdf_buffer' in st.session_state and st.session_state.pdf_buffer:
+                    st.download_button(
+                        label="⬇️ Download PDF",
+                        data=st.session_state.pdf_buffer,
+                        file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("Generate PDF first to download")
 
 def chatbot_page():
     st.title("💬 Multilingual Chatbot")
