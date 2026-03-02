@@ -18,7 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import requests
 from PIL import Image as PILImage
-from moviepy import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
+from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
 import tempfile
 import re
 
@@ -398,17 +398,13 @@ Text to translate:
         return text
 
 def generate_itinerary(city, country, duration, user_input, city_row):
-    """
-    Generate complete itinerary without truncation.
-    Uses a single comprehensive prompt with longer max tokens.
-    """
+    """Generate complete itinerary"""
     if not GEMINI_AVAILABLE:
         return "Itinerary generation requires Gemini API"
     
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
-        # Build comprehensive prompt
         prompt = f"""You are an expert travel itinerary planner. Create a complete, detailed {duration}-day itinerary for {city}, {country}.
 
 TRAVELER PROFILE:
@@ -443,7 +439,6 @@ CRITICAL RULES:
 
 GENERATE THE FULL ITINERARY NOW:"""
 
-        # Use higher token limit to ensure complete response
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -456,8 +451,6 @@ GENERATE THE FULL ITINERARY NOW:"""
         
         if response and response.text:
             full_itinerary = response.text.strip()
-            
-            # Verify we got substantial content
             if len(full_itinerary) > 800:
                 return full_itinerary
             else:
@@ -470,9 +463,7 @@ GENERATE THE FULL ITINERARY NOW:"""
         return f"Error: {str(e)}"
 
 def generate_itinerary_retry(city, country, duration, user_input):
-    """
-    Retry itinerary generation with a simpler, more direct prompt.
-    """
+    """Retry itinerary generation"""
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
         
@@ -514,7 +505,6 @@ def parse_itinerary_into_days(itinerary_text):
     """Parse itinerary text into structured day data"""
     days_data = []
     
-    # Split by day markers
     day_pattern = r'\*\*Day\s+(\d+)\s*-\s*([^*]+)\*\*'
     day_matches = list(re.finditer(day_pattern, itinerary_text))
     
@@ -522,21 +512,16 @@ def parse_itinerary_into_days(itinerary_text):
         day_num = match.group(1)
         day_title = match.group(2).strip()
         
-        # Get content until next day or end
         start = match.end()
         end = day_matches[i + 1].start() if i + 1 < len(day_matches) else len(itinerary_text)
         day_content = itinerary_text[start:end]
         
-        # Extract locations and descriptions
         locations = []
-        
-        # Look for Morning, Lunch, Afternoon, Evening sections
         time_periods = ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:']
         
         for period in time_periods:
             if period in day_content:
                 start_idx = day_content.find(period)
-                # Find next period or end
                 next_period_idx = float('inf')
                 for next_period in time_periods:
                     idx = day_content.find(next_period, start_idx + 1)
@@ -548,14 +533,12 @@ def parse_itinerary_into_days(itinerary_text):
                 
                 content = day_content[start_idx:next_period_idx].replace(period, '').strip()
                 
-                # Extract location name
                 sentences = content.split('.')
                 first_sentence = sentences[0].strip() if sentences else ''
                 
                 words = first_sentence.split()
                 location = ' '.join(words[:2]) if len(words) > 1 else (words[0] if words else period.replace(':', ''))
                 
-                # Create caption for video
                 caption = f"{period.replace(':', '')}: {location}"
                 
                 locations.append({
@@ -574,7 +557,7 @@ def parse_itinerary_into_days(itinerary_text):
     return days_data
 
 def fetch_pexels_image(query, filename, page=1):
-    """Fetch image from Pexels API with pagination to avoid duplicates"""
+    """Fetch image from Pexels API"""
     try:
         if not PEXELS_AVAILABLE:
             return None
@@ -596,7 +579,6 @@ def fetch_pexels_image(query, filename, page=1):
         if not data.get("photos"):
             return None
         
-        # Get a random image from results to avoid duplicates
         import random
         photo = random.choice(data["photos"][:3])
         image_url = photo["src"]["landscape"]
@@ -612,19 +594,8 @@ def fetch_pexels_image(query, filename, page=1):
 
 
 def create_subtitle_clip(text, duration, y_position=620):
-    """
-    Create a properly formatted subtitle clip with better visibility
-    
-    Args:
-        text: The subtitle text
-        duration: How long to display
-        y_position: Vertical position (default near bottom)
-    
-    Returns:
-        TextClip with proper formatting
-    """
+    """Create a properly formatted subtitle clip"""
     try:
-        # Create text clip with better formatting
         subtitle = TextClip(
             txt=text,
             fontsize=24,
@@ -643,21 +614,19 @@ def create_subtitle_clip(text, duration, y_position=620):
 
 
 def generate_itinerary_video(itinerary_text, city, country, user_input):
-    """Generate complete travel video from itinerary with improved subtitles"""
+    """Generate complete travel video from itinerary"""
     
     if not PEXELS_AVAILABLE:
         st.error("Pexels API not configured. Please add PEXELS_API_KEY to secrets.")
         return None
     
     try:
-        # Parse itinerary
         days_data = parse_itinerary_into_days(itinerary_text)
         
         if not days_data:
             st.error("Could not parse itinerary. Please ensure it's properly formatted.")
             return None
         
-        # Create temporary directory
         temp_dir = tempfile.mkdtemp()
         st.info(f"📹 Generating video with {len(days_data)} days...")
         
@@ -668,20 +637,15 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             st.write(f"Processing **Day {day_data['day_num']}: {day_data['day_title']}**")
             
             locations = day_data['locations']
-            
-            # Calculate duration (3 seconds per location for better subtitle visibility)
             duration_per_location = 3
-            
             image_clips = []
             
-            # Fetch and process images for each location
             for loc_idx, location in enumerate(locations):
                 st.write(f"    🖼️ Fetching image for {location['location']}...")
                 
                 search_query = f"{location['location']} {city}"
                 image_file = os.path.join(temp_dir, f"day_{day_data['day_num']}_loc_{loc_idx}.jpg")
                 
-                # Try multiple pages to get different images
                 success = False
                 for page in range(1, 3):
                     if fetch_pexels_image(search_query, image_file, page=page):
@@ -690,28 +654,20 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 
                 if not success:
                     st.warning(f"Could not fetch image for {location['location']}, using placeholder")
-                    # Create a simple placeholder
                     placeholder = PILImage.new('RGB', (1280, 720), color=(70, 130, 180))
                     placeholder.save(image_file)
                 
-                # Load image and create clip
                 try:
                     img = PILImage.open(image_file)
-                    # Resize to standard video size
                     img = img.resize((1280, 720))
                     frame = np.array(img)
                     
-                    # Create base image clip
                     base_clip = ImageClip(frame).set_duration(duration_per_location)
                     
-                    # Create subtitle with improved formatting
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
-                    
-                    # Create the subtitle clip with better positioning
                     subtitle = create_subtitle_clip(caption_text, duration_per_location, y_position=620)
                     
                     if subtitle:
-                        # Composite the image and subtitle
                         clip = CompositeVideoClip([base_clip, subtitle])
                     else:
                         clip = base_clip
@@ -726,10 +682,8 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 st.warning(f"No images for Day {day_data['day_num']}, skipping")
                 continue
             
-            # Concatenate all images for this day
             video = concatenate_videoclips(image_clips)
             
-            # Add day header with better formatting
             day_header = TextClip(
                 txt=f"Day {day_data['day_num']} - {day_data['day_title']}",
                 fontsize=44,
@@ -741,12 +695,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 size=(1100, None)
             ).set_duration(2.5).set_position(('center', 'center'))
             
-            # Create background for day header
             day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
-            
             day_header_video = CompositeVideoClip([day_header_bg, day_header])
             
-            # Combine header with day video
             video = concatenate_videoclips([day_header_video, video])
             day_clips.append(video)
             
@@ -756,11 +707,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             st.error("No valid day clips were created. Please check your itinerary format.")
             return None
         
-        # Merge all days
         st.write("📀 Merging all days...")
         final_video = concatenate_videoclips(day_clips)
         
-        # Add title slide with better formatting
         title_text = TextClip(
             txt=f"Your {city}, {country} Adventure",
             fontsize=56,
@@ -782,12 +731,10 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         ).set_duration(3.5).set_position(('center', 400))
         
         title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
-        
         title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
         
         final_video = concatenate_videoclips([title_slide_video, final_video])
         
-        # Write to buffer
         st.write("💾 Rendering video...")
         output_buffer = BytesIO()
         output_path = os.path.join(temp_dir, "output.mp4")
@@ -801,13 +748,11 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             logger=None
         )
         
-        # Read file into buffer
         with open(output_path, 'rb') as f:
             output_buffer.write(f.read())
         
         output_buffer.seek(0)
         
-        # Cleanup
         try:
             import shutil
             shutil.rmtree(temp_dir)
@@ -876,14 +821,12 @@ def create_weather_icon(weather_type):
     return weather_icons.get(weather_type, "🌤️")
 
 def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_row, user_input, language="English"):
-    """Generate PDF from itinerary data using ReportLab - with improved text handling"""
+    """Generate PDF from itinerary data"""
     
     try:
-        # Create PDF buffer
         pdf_buffer = BytesIO()
         doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
         
-        # Define styles
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
             'CustomTitle',
@@ -942,15 +885,12 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             spaceAfter=6
         )
         
-        # Build PDF content
         content = []
         
-        # Title
         title = Paragraph(f"🌍 {city}, {country}", title_style)
         content.append(title)
         content.append(Spacer(1, 0.2*inch))
         
-        # Destination info section
         weather_icon = create_weather_icon(weather)
         info_data = [
             ["📊 Destination Information", ""],
@@ -977,22 +917,18 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
         content.append(info_table)
         content.append(Spacer(1, 0.3*inch))
         
-        # Daily itinerary section
         content.append(Paragraph("📋 Your Personalized Itinerary", heading_style))
         content.append(Spacer(1, 0.1*inch))
         
-        # Parse itinerary more carefully
         lines = itinerary_text.split('\n')
         
         for line in lines:
             stripped = line.strip()
             
             if not stripped:
-                # Empty line
                 content.append(Spacer(1, 0.08*inch))
                 
             elif stripped.startswith('**Day'):
-                # Day heading
                 day_title = stripped.replace('**', '').strip()
                 try:
                     content.append(Paragraph(day_title, day_style))
@@ -1000,26 +936,21 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
                 except:
                     pass
                     
-            elif stripped.startswith('Morning:') or stripped.startswith('Lunch:') or \
-                 stripped.startswith('Afternoon:') or stripped.startswith('Evening:') or \
-                 stripped.startswith('Budget Tip:') or stripped.startswith('Local Insight:') or \
-                 stripped.startswith('Tips:'):
-                # Activity lines
+            elif any(stripped.startswith(p) for p in ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:', 'Budget Tip:', 'Local Insight:', 'Tips:']):
                 cleaned = stripped.replace('**', '').replace('__', '').replace('_', '')
                 cleaned = cleaned.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 
                 try:
-                    para = Paragraph(f"<b>{cleaned.split(':')[0]}:</b> {':'.join(cleaned.split(':')[1:]).strip()}", bullet_style)
+                    parts = cleaned.split(':', 1)
+                    if len(parts) == 2:
+                        para = Paragraph(f"<b>{parts[0]}:</b> {parts[1].strip()}", bullet_style)
+                    else:
+                        para = Paragraph(cleaned, bullet_style)
                     content.append(para)
                 except:
-                    try:
-                        para = Paragraph(cleaned, bullet_style)
-                        content.append(para)
-                    except:
-                        pass
+                    pass
                         
             else:
-                # Regular text
                 cleaned = stripped.replace('**', '').replace('__', '').replace('_', '')
                 cleaned = cleaned.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
                 
@@ -1031,22 +962,15 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
                         pass
         
         content.append(Spacer(1, 0.2*inch))
-        
-        # Footer
         footer_text = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | Language: {language} | AI Cultural Tourism Engine"
         try:
             content.append(Paragraph(footer_text, info_style))
         except:
             pass
         
-        # Build PDF
-        try:
-            doc.build(content)
-            pdf_buffer.seek(0)
-            return pdf_buffer
-        except Exception as build_error:
-            st.error(f"PDF build error: {str(build_error)}")
-            return None
+        doc.build(content)
+        pdf_buffer.seek(0)
+        return pdf_buffer
         
     except Exception as e:
         st.error(f"Error generating PDF: {str(e)}")
@@ -1343,7 +1267,6 @@ def itinerary_page():
             st.session_state.current_user_input = user_input
             st.rerun()
     
-    # Display itinerary if available
     if st.session_state.current_itinerary:
         itinerary = st.session_state.current_itinerary
         city_row = st.session_state.current_city
@@ -1352,7 +1275,6 @@ def itinerary_page():
         st.markdown("### 📅 Your Personalized Itinerary")
         st.success("✅ Itinerary generated successfully!")
         
-        # Display with text_area for best rendering of long content
         st.text_area(
             "Full Itinerary",
             value=itinerary,
@@ -1363,7 +1285,6 @@ def itinerary_page():
         
         st.markdown("")
         
-        # PDF Download Section
         st.markdown("### 📥 Download Itinerary as PDF")
         
         pdf_language = st.selectbox(
@@ -1466,15 +1387,12 @@ def video_page():
                 st.session_state.video_generated = True
                 st.rerun()
     
-    # Display video if available
     if st.session_state.video_generated and st.session_state.video_buffer:
         st.markdown("---")
         st.markdown("### ✅ Your Video is Ready!")
         
-        # Display video
         st.video(st.session_state.video_buffer)
         
-        # Download button
         st.download_button(
             label="⬇️ Download Video",
             data=st.session_state.video_buffer,
