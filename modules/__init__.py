@@ -1,23 +1,49 @@
 """
-Modules package for AI Cultural Tourism Engine
+Modules package for Tourism Engine
+Imports utilities for easy access
 """
 
-from .gemini_utils import generate_itinerary, initialize_gemini
-from .pdf_utils import generate_itinerary_pdf, create_weather_icon
-from .firebase_utils import initialize_firebase, save_recommendation_to_firebase, get_user_preferences_from_firebase
-from .data_utils import load_data, get_city_image, filter_destinations, rank_destinations
+from modules.data_utils import (
+    load_data,
+    get_age_group,
+    get_user_pattern,
+    get_dynamic_weights,
+    filter_cities,
+    rank_cities,
+    get_city_image,
+    save_feedback,
+)
+
+from modules.firebase_utils import (
+    initialize_firebase,
+    save_to_firebase,
+    get_session_recommendations,
+)
+
+from modules.gemini_utils import (
+    initialize_gemini,
+    gemini_weather_advice,
+    gemini_translate,
+    generate_itinerary,
+)
 
 __all__ = [
-    'generate_itinerary',
-    'initialize_gemini',
-    'generate_itinerary_pdf',
-    'create_weather_icon',
-    'initialize_firebase',
-    'save_recommendation_to_firebase',
-    'get_user_preferences_from_firebase',
-    'load_data',
-    'get_city_image',
-    'filter_destinations',
-    'rank_destinations',
+    # Data utilities
+    "load_data",
+    "get_age_group",
+    "get_user_pattern",
+    "get_dynamic_weights",
+    "filter_cities",
+    "rank_cities",
+    "get_city_image",
+    "save_feedback",
+    # Firebase utilities
+    "initialize_firebase",
+    "save_to_firebase",
+    "get_session_recommendations",
+    # Gemini utilities
+    "initialize_gemini",
+    "gemini_weather_advice",
+    "gemini_translate",
+    "generate_itinerary",
 ]
-
