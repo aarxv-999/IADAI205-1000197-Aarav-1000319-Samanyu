@@ -623,7 +623,7 @@ def create_subtitle_clip(text, duration, y_position=620):
             color='white',
             method='caption',
             size=(1200, None)
-        ).set_duration(duration).set_position(('center', y_position))
+        ).with_duration(duration).set_position(('center', y_position))
         
         return subtitle
     except Exception as e:
@@ -698,7 +698,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     frame = np.array(img)
                     st.write(f"      🎬 Frame shape: {frame.shape}")
                     
-                    base_clip = ImageClip(frame).set_duration(duration_per_location)
+                    base_clip = ImageClip(frame).with_duration(duration_per_location)
                     st.write(f"      ✅ ImageClip created")
                     
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
@@ -735,9 +735,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 color='white',
                 method='caption',
                 size=(1100, None)
-            ).set_duration(2.5).set_position(('center', 'center'))
+            ).with_duration(2.5).set_position(('center', 'center'))
             
-            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
+            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).with_duration(2.5)
             day_header_video = CompositeVideoClip([day_header_bg, day_header])
             
             video = concatenate_videoclips([day_header_video, video])
@@ -760,7 +760,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             color='white',
             method='caption',
             size=(1100, None)
-        ).set_duration(3.5).set_position(('center', 300))
+        ).with_duration(3.5).set_position(('center', 300))
         
         subtitle_text = TextClip(
             f"A {user_input['interest']} Journey",
@@ -769,9 +769,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             color='lightblue',
             method='caption',
             size=(1100, None)
-        ).set_duration(3.5).set_position(('center', 400))
+        ).with_duration(3.5).set_position(('center', 400))
         
-        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
+        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).with_duration(3.5)
         title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
         
         final_video = concatenate_videoclips([title_slide_video, final_video])
