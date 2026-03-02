@@ -18,7 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import requests
 from PIL import Image as PILImage
-import moviepy
+from moviepy.editor import ImageClip, TextClip, CompositeVideoClip, concatenate_videoclips, ColorClip
 import tempfile
 import re
 
@@ -448,7 +448,7 @@ GENERATE THE FULL ITINERARY NOW:"""
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.8,
-                max_output_tokens=8000,  # Increased significantly
+                max_output_tokens=8000,
                 top_p=0.95,
                 top_k=40
             )
@@ -461,7 +461,6 @@ GENERATE THE FULL ITINERARY NOW:"""
             if len(full_itinerary) > 800:
                 return full_itinerary
             else:
-                # If response seems too short, try again with adjusted prompt
                 return generate_itinerary_retry(city, country, duration, user_input)
         else:
             return "Failed to generate itinerary. Please try again."
@@ -549,16 +548,14 @@ def parse_itinerary_into_days(itinerary_text):
                 
                 content = day_content[start_idx:next_period_idx].replace(period, '').strip()
                 
-                # Extract location name - look for specific location/place names
-                # Usually the first sentence contains the main location
+                # Extract location name
                 sentences = content.split('.')
                 first_sentence = sentences[0].strip() if sentences else ''
                 
-                # Try to extract just the location name (usually first 2-5 words)
                 words = first_sentence.split()
                 location = ' '.join(words[:2]) if len(words) > 1 else (words[0] if words else period.replace(':', ''))
                 
-                # Create shorter caption for video (time period + location)
+                # Create caption for video
                 caption = f"{period.replace(':', '')}: {location}"
                 
                 locations.append({
@@ -614,7 +611,7 @@ def fetch_pexels_image(query, filename, page=1):
         return None
 
 
-def create_subtitle_clip(text, duration, y_position=650):
+def create_subtitle_clip(text, duration, y_position=620):
     """
     Create a properly formatted subtitle clip with better visibility
     
@@ -633,15 +630,11 @@ def create_subtitle_clip(text, duration, y_position=650):
             fontsize=24,
             font='Arial',
             color='white',
-            method='caption',  # Use caption method for word wrapping
-            size=(1200, None),  # Width with auto height
+            method='caption',
+            size=(1200, None),
             stroke_color='black',
             stroke_width=2
-        )
-        
-        # Set duration and position
-        subtitle = subtitle.set_duration(duration)
-        subtitle = subtitle.set_position(('center', y_position))
+        ).set_duration(duration).set_position(('center', y_position))
         
         return subtitle
     except Exception as e:
@@ -746,9 +739,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 stroke_width=3,
                 method='caption',
                 size=(1100, None)
-            )
-            day_header = day_header.set_duration(2.5)
-            day_header = day_header.set_position(('center', 'center'))
+            ).set_duration(2.5).set_position(('center', 'center'))
             
             # Create background for day header
             day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
@@ -779,9 +770,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             stroke_width=3,
             method='caption',
             size=(1100, None)
-        )
-        title_text = title_text.set_duration(3.5)
-        title_text = title_text.set_position(('center', 300))
+        ).set_duration(3.5).set_position(('center', 300))
         
         subtitle_text = TextClip(
             txt=f"A {user_input['interest']} Journey",
@@ -790,9 +779,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             color='lightblue',
             method='caption',
             size=(1100, None)
-        )
-        subtitle_text = subtitle_text.set_duration(3.5)
-        subtitle_text = subtitle_text.set_position(('center', 400))
+        ).set_duration(3.5).set_position(('center', 400))
         
         title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
         
@@ -1086,7 +1073,7 @@ def home_page():
         - **Generate Itineraries** - Receive day-wise travel plans crafted just for you
         - **Get Smart Recommendations** - Discover hidden gems similar to your interests
         - **Multilingual Support** - Chat with our AI in your preferred language
-        - **Create Travel Videos** - Generate beautiful travel recap videos with audio and subtitles
+        - **Create Travel Videos** - Generate beautiful travel recap videos with subtitles
         - **Save Your Sessions** - All recommendations are securely stored
         
         **Ready to explore?** Go to Personalization to get started.
@@ -1112,7 +1099,7 @@ def home_page():
             st.success(f"✅ Saved: {st.session_state.firebase_doc_id[:8]}...")
         
         st.markdown("---")
-        st.subheader("🤖 AI Status")
+        st.subheader("���� AI Status")
         if GEMINI_AVAILABLE:
             st.success("✅ Gemini API Connected")
         else:
@@ -1410,7 +1397,7 @@ def itinerary_page():
         with col2:
             if st.session_state.pdf_buffer:
                 st.download_button(
-                    label="⬇️ Download PDF",
+                    label="⬇�� Download PDF",
                     data=st.session_state.pdf_buffer,
                     file_name=f"{city_row['city']}_itinerary_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
