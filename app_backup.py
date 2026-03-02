@@ -614,21 +614,21 @@ def fetch_pexels_image(query, filename, page=1):
         return None
 
 def create_subtitle_clip(text, duration, y_position=620):
-    """Create a properly formatted subtitle clip"""
-    try:
-        subtitle = TextClip(
-            text,
-            fontsize=24,
-            font='Arial',
-            color='white',
-            method='caption',
-            size=(1200, None)
-        ).with_duration(duration).set_position(('center', y_position))
-        
-        return subtitle
-    except Exception as e:
-        st.warning(f"❌ Error creating subtitle: {str(e)}")
-        return None
+	"""Create a properly formatted subtitle clip"""
+	try:
+		subtitle = TextClip(
+			text=text,
+			fontsize=24,
+			font='Arial',
+			color='white',
+			method='caption',
+			size=(1200, None)
+		).with_duration(duration).set_position(('center', y_position))
+		
+		return subtitle
+	except Exception as e:
+		st.warning(f"❌ Error creating subtitle: {str(e)}")
+		return None
 
 
 def generate_itinerary_video(itinerary_text, city, country, user_input):
@@ -728,14 +728,14 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             video = concatenate_videoclips(image_clips)
             st.write(f"   ✅ Day video created")
             
-            day_header = TextClip(
-                f"Day {day_data['day_num']} - {day_data['day_title']}",
-                fontsize=44,
-                font='Arial',
-                color='white',
-                method='caption',
-                size=(1100, None)
-            ).with_duration(2.5).set_position(('center', 'center'))
+		day_header = TextClip(
+			text=f"Day {day_data['day_num']} - {day_data['day_title']}",
+			fontsize=44,
+			font='Arial',
+			color='white',
+			method='caption',
+			size=(1100, None)
+		).with_duration(2.5).set_position(('center', 'center'))
             
             day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).with_duration(2.5)
             day_header_video = CompositeVideoClip([day_header_bg, day_header])
@@ -753,23 +753,23 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         final_video = concatenate_videoclips(day_clips)
         st.write("✅ All days merged")
         
-        title_text = TextClip(
-            f"Your {city}, {country} Adventure",
-            fontsize=56,
-            font='Arial',
-            color='white',
-            method='caption',
-            size=(1100, None)
-        ).with_duration(3.5).set_position(('center', 300))
+		title_text = TextClip(
+			text=f"Your {city}, {country} Adventure",
+			fontsize=56,
+			font='Arial',
+			color='white',
+			method='caption',
+			size=(1100, None)
+		).with_duration(3.5).set_position(('center', 300))
         
-        subtitle_text = TextClip(
-            f"A {user_input['interest']} Journey",
-            fontsize=28,
-            font='Arial',
-            color='lightblue',
-            method='caption',
-            size=(1100, None)
-        ).with_duration(3.5).set_position(('center', 400))
+		subtitle_text = TextClip(
+			text=f"A {user_input['interest']} Journey",
+			fontsize=28,
+			font='Arial',
+			color='lightblue',
+			method='caption',
+			size=(1100, None)
+		).with_duration(3.5).set_position(('center', 400))
         
         title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).with_duration(3.5)
         title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
