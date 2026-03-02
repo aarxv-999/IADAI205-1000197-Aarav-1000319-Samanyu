@@ -655,7 +655,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     img = img.resize((1280, 720))
                     frame = np.array(img)
                     
-                    clip = ImageClip(frame).set_duration(duration_per_location)
+                    clip = ImageClip(frame).with_duration(duration_per_location)
                     
                     # Add caption
                     caption_text = f"{location['time_period']}: {location['location']}"
@@ -665,7 +665,7 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                         color="white",
                         size=(1280, 720),
                         method="caption"
-                    ).set_duration(duration_per_location).set_position(("center", "bottom"))
+                    ).with_duration(duration_per_location).with_position(("center", "bottom"))
                     
                     # Composite caption on image
                     clip = CompositeVideoClip([clip, caption])
@@ -689,10 +689,10 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                 color="yellow",
                 size=(1280, 720),
                 method="caption"
-            ).set_duration(2).set_position(("center", "center"))
+            ).with_duration(2).with_position(("center", "center"))
             
             day_header_video = CompositeVideoClip([
-                ColorClip(size=(1280, 720), color=(0, 0, 0)).set_duration(2),
+                ColorClip(size=(1280, 720), color=(0, 0, 0)).with_duration(2),
                 day_header
             ])
             
@@ -717,10 +717,10 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             color="white",
             size=(1280, 720),
             method="caption"
-        ).set_duration(3).set_position(("center", "center"))
+        ).with_duration(3).with_position(("center", "center"))
         
         title_slide_video = CompositeVideoClip([
-            ColorClip(size=(1280, 720), color=(25, 25, 112)).set_duration(3),
+            ColorClip(size=(1280, 720), color=(25, 25, 112)).with_duration(3),
             title_slide
         ])
         
@@ -1062,7 +1062,7 @@ def home_page():
             st.warning("⚠️ Firebase Unavailable")
         
         st.markdown("---")
-        if st.button("🔄 Start New Session", help="Clear current recommendations and start fresh"):
+        if st.button("��� Start New Session", help="Clear current recommendations and start fresh"):
             st.session_state.ranked_results = None
             st.session_state.user_input = None
             st.session_state.session_id = str(uuid.uuid4())
