@@ -18,7 +18,7 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
 import requests
 from PIL import Image as PILImage
-from moviepy import *
+from moviepy.editor import *
 import tempfile
 import re
 
@@ -614,9 +614,43 @@ def fetch_pexels_image(query, filename, page=1):
         return None
 
 
+def create_subtitle_clip(text, duration, y_position=650):
+    """
+    Create a properly formatted subtitle clip with better visibility
+    
+    Args:
+        text: The subtitle text
+        duration: How long to display
+        y_position: Vertical position (default near bottom)
+    
+    Returns:
+        TextClip with proper formatting
+    """
+    try:
+        # Create text clip with better formatting
+        subtitle = TextClip(
+            txt=text,
+            fontsize=24,
+            font='Arial',
+            color='white',
+            method='caption',  # Use caption method for word wrapping
+            size=(1200, None),  # Width with auto height
+            stroke_color='black',
+            stroke_width=2
+        )
+        
+        # Set duration and position
+        subtitle = subtitle.set_duration(duration)
+        subtitle = subtitle.set_position(('center', y_position))
+        
+        return subtitle
+    except Exception as e:
+        st.warning(f"Error creating subtitle: {str(e)}")
+        return None
+
 
 def generate_itinerary_video(itinerary_text, city, country, user_input):
-    """Generate complete travel video from itinerary"""
+    """Generate complete travel video from itinerary with improved subtitles"""
     
     if not PEXELS_AVAILABLE:
         st.error("Pexels API not configured. Please add PEXELS_API_KEY to secrets.")
@@ -642,8 +676,8 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             
             locations = day_data['locations']
             
-            # Calculate duration (2 seconds per location)
-            duration_per_location = 2
+            # Calculate duration (3 seconds per location for better subtitle visibility)
+            duration_per_location = 3
             
             image_clips = []
             
@@ -674,23 +708,21 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     img = img.resize((1280, 720))
                     frame = np.array(img)
                     
-                    clip = ImageClip(frame).with_duration(duration_per_location)
+                    # Create base image clip
+                    base_clip = ImageClip(frame).set_duration(duration_per_location)
                     
-                    # Add caption - use the improved caption from parsing
+                    # Create subtitle with improved formatting
                     caption_text = location.get('caption', f"{location['time_period']}: {location['location']}")
                     
-                    # Create text clip without size constraint to let moviepy calculate proper size
-                    caption = TextClip(
-                        text=caption_text,
-                        font_size=20,
-                        color="white"
-                    )
-                    # Set duration and position after creation
-                    caption = caption.with_duration(duration_per_location)
-                    caption = caption.with_position(('center', 600))
+                    # Create the subtitle clip with better positioning
+                    subtitle = create_subtitle_clip(caption_text, duration_per_location, y_position=620)
                     
-                    # Composite caption on image
-                    clip = CompositeVideoClip([clip, caption])
+                    if subtitle:
+                        # Composite the image and subtitle
+                        clip = CompositeVideoClip([base_clip, subtitle])
+                    else:
+                        clip = base_clip
+                    
                     image_clips.append(clip)
                     
                 except Exception as e:
@@ -704,18 +736,24 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             # Concatenate all images for this day
             video = concatenate_videoclips(image_clips)
             
-            # Add day header
+            # Add day header with better formatting
             day_header = TextClip(
-                text=f"Day {day_data['day_num']} - {day_data['day_title']}",
-                font_size=40,
-                color="yellow"
+                txt=f"Day {day_data['day_num']} - {day_data['day_title']}",
+                fontsize=44,
+                font='Arial',
+                color='white',
+                stroke_color='darkblue',
+                stroke_width=3,
+                method='caption',
+                size=(1100, None)
             )
-            day_header = day_header.with_duration(2).with_position(("center", "center"))
+            day_header = day_header.set_duration(2.5)
+            day_header = day_header.set_position(('center', 'center'))
             
-            day_header_video = CompositeVideoClip([
-                ColorClip(size=(1280, 720), color=(0, 0, 0)).with_duration(2),
-                day_header
-            ])
+            # Create background for day header
+            day_header_bg = ColorClip(size=(1280, 720), color=(10, 40, 100)).set_duration(2.5)
+            
+            day_header_video = CompositeVideoClip([day_header_bg, day_header])
             
             # Combine header with day video
             video = concatenate_videoclips([day_header_video, video])
@@ -731,18 +769,34 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
         st.write("📀 Merging all days...")
         final_video = concatenate_videoclips(day_clips)
         
-        # Add title slide
-        title_slide = TextClip(
-            text=f"Your {city}, {country} Adventure",
-            font_size=48,
-            color="white"
+        # Add title slide with better formatting
+        title_text = TextClip(
+            txt=f"Your {city}, {country} Adventure",
+            fontsize=56,
+            font='Arial',
+            color='white',
+            stroke_color='gold',
+            stroke_width=3,
+            method='caption',
+            size=(1100, None)
         )
-        title_slide = title_slide.with_duration(3).with_position(("center", "center"))
+        title_text = title_text.set_duration(3.5)
+        title_text = title_text.set_position(('center', 300))
         
-        title_slide_video = CompositeVideoClip([
-            ColorClip(size=(1280, 720), color=(25, 25, 112)).with_duration(3),
-            title_slide
-        ])
+        subtitle_text = TextClip(
+            txt=f"A {user_input['interest']} Journey",
+            fontsize=28,
+            font='Arial',
+            color='lightblue',
+            method='caption',
+            size=(1100, None)
+        )
+        subtitle_text = subtitle_text.set_duration(3.5)
+        subtitle_text = subtitle_text.set_position(('center', 400))
+        
+        title_slide_bg = ColorClip(size=(1280, 720), color=(20, 50, 120)).set_duration(3.5)
+        
+        title_slide_video = CompositeVideoClip([title_slide_bg, title_text, subtitle_text])
         
         final_video = concatenate_videoclips([title_slide_video, final_video])
         
@@ -755,7 +809,9 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
             output_path,
             fps=24,
             codec="libx264",
-            audio=False
+            audio=False,
+            verbose=False,
+            logger=None
         )
         
         # Read file into buffer
@@ -826,7 +882,7 @@ def get_city_image(city):
 def create_weather_icon(weather_type):
     """Return weather emoji based on type"""
     weather_icons = {
-        "Cold": "���️",
+        "Cold": "❄️",
         "Pleasant": "🌤️",
         "Warm": "☀️"
     }
@@ -1081,7 +1137,7 @@ def home_page():
             st.warning("⚠️ Firebase Unavailable")
         
         st.markdown("---")
-        if st.button("��� Start New Session", help="Clear current recommendations and start fresh"):
+        if st.button("🔄 Start New Session", help="Clear current recommendations and start fresh"):
             st.session_state.ranked_results = None
             st.session_state.user_input = None
             st.session_state.session_id = str(uuid.uuid4())
@@ -1390,9 +1446,8 @@ def video_page():
     **What this video will include:**
     - 🎬 Title slide with destination name
     - 📸 High-quality images from Pexels for each location
-    - 🎤 Synchronized audio narration
-    - 📝 Subtitles showing locations and times
-    - 🔤 Day-by-day breakdown
+    - 📝 Clear subtitles showing locations and times
+    - 🔤 Day-by-day breakdown with proper formatting
     - 🎵 Professional MP4 format
     
     **Note:** Video generation takes a few minutes. Please be patient!
