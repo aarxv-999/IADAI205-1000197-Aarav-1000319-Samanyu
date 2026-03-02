@@ -25,6 +25,8 @@ from modules.gemini_utils import (
     gemini_weather_advice,
     gemini_translate,
     generate_itinerary,
+    is_gemini_available,
+    get_gemini_error,
 )
 
 __all__ = [
@@ -46,4 +48,6 @@ __all__ = [
     "gemini_weather_advice",
     "gemini_translate",
     "generate_itinerary",
+    "is_gemini_available",
+    "get_gemini_error",
 ]
