@@ -1,33 +1,38 @@
 """
-PDF generation utilities for creating itinerary PDFs
+PDF generation utilities for creating travel itinerary PDFs
 """
-import streamlit as st
-from datetime import datetime
+
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from io import BytesIO
+from config import WEATHER_ICONS
 
+
+# =========================
+# WEATHER ICONS
+# =========================
 def create_weather_icon(weather_type):
     """Return weather emoji based on type"""
-    weather_icons = {
-        "Cold": "❄️",
-        "Pleasant": "🌤️",
-        "Warm": "☀️"
-    }
-    return weather_icons.get(weather_type, "🌤️")
+    return WEATHER_ICONS.get(weather_type, "🌤️")
 
+
+# =========================
+# PDF GENERATION
+# =========================
 def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_row, user_input, language="English"):
-    """Generate PDF from itinerary data using ReportLab"""
-    
+    """
+    Generate PDF from itinerary data using ReportLab
+    """
+
     try:
         # Create PDF buffer
         pdf_buffer = BytesIO()
         doc = SimpleDocTemplate(pdf_buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
-        
+
         # Define styles
         styles = getSampleStyleSheet()
         title_style = ParagraphStyle(
@@ -39,7 +44,7 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             alignment=TA_CENTER,
             fontName='Helvetica-Bold'
         )
-        
+
         heading_style = ParagraphStyle(
             'CustomHeading',
             parent=styles['Heading2'],
@@ -49,7 +54,7 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             spaceBefore=10,
             fontName='Helvetica-Bold'
         )
-        
+
         normal_style = ParagraphStyle(
             'CustomNormal',
             parent=styles['Normal'],
@@ -58,7 +63,7 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             spaceAfter=8,
             leading=14
         )
-        
+
         info_style = ParagraphStyle(
             'InfoText',
             parent=styles['Normal'],
@@ -66,15 +71,15 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             textColor=colors.HexColor('#555555'),
             spaceAfter=6
         )
-        
+
         # Build PDF content
         content = []
-        
+
         # Title
         title = Paragraph(f"🌍 {city}, {country}", title_style)
         content.append(title)
         content.append(Spacer(1, 0.2*inch))
-        
+
         # Destination info section
         weather_icon = create_weather_icon(weather)
         info_data = [
@@ -87,7 +92,7 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
             ["Ideal Duration:", f"📅 {city_row['ideal_duration_days']} days"],
             ["Budget Level:", f"💰 {user_input['budget']}"],
         ]
-        
+
         info_table = Table(info_data, colWidths=[2*inch, 4*inch])
         info_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (1, 0), colors.HexColor('#e8f0f8')),
@@ -101,19 +106,18 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
         ]))
         content.append(info_table)
         content.append(Spacer(1, 0.3*inch))
-        
+
         # Daily itinerary section
         content.append(Paragraph("📋 Your Personalized Itinerary", heading_style))
         content.append(Spacer(1, 0.1*inch))
-        
-        # Parse and format itinerary line-by-line to prevent truncation
-        # Create many small Paragraph objects instead of few large ones
+
+        # Parse and format itinerary line-by-line
         itinerary_lines = itinerary_text.split('\n')
         current_section = []
-        
+
         for i, line in enumerate(itinerary_lines):
             stripped_line = line.strip()
-            
+
             if not stripped_line:
                 # Empty line - add spacing
                 if current_section:
@@ -121,77 +125,53 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
                         content.append(item)
                     current_section = []
                 content.append(Spacer(1, 0.08*inch))
-                
+
             elif stripped_line.startswith('**Day'):
                 # Day header - flush previous section and add new header
                 if current_section:
                     for item in current_section:
                         content.append(item)
                     current_section = []
-                
-                content.append(Spacer(1, 0.15*inch))
-                day_text = stripped_line.replace('**', '').strip()
-                try:
-                    content.append(Paragraph(f"<b>{day_text}</b>", heading_style))
-                except Exception as ex:
-                    content.append(Paragraph(day_text, heading_style))
-                content.append(Spacer(1, 0.08*inch))
-                
-            elif stripped_line.startswith('-') or stripped_line.startswith('•'):
+
+                content.append(Paragraph(stripped_line.replace('**', ''), heading_style))
+                content.append(Spacer(1, 0.05*inch))
+
+            elif stripped_line.startswith('- '):
                 # Bullet point
-                bullet_text = stripped_line.lstrip('-• ').strip()
-                # Escape problematic characters
-                bullet_text = bullet_text.replace('**', '').replace('&', '&amp;')
-                try:
-                    para = Paragraph(f"• {bullet_text}", normal_style)
-                    current_section.append(para)
-                except Exception as ex:
-                    # If paragraph fails, add as escaped text
-                    escaped_text = bullet_text.replace('<', '&lt;').replace('>', '&gt;')
-                    try:
-                        para = Paragraph(f"• {escaped_text}", normal_style)
-                        current_section.append(para)
-                    except:
-                        pass
-                
-            else:
+                clean_text = stripped_line[2:]
+                para = Paragraph(f"• {clean_text}", normal_style)
+                current_section.append(para)
+
+            elif stripped_line and not stripped_line.startswith('-'):
                 # Regular text line
-                text_clean = stripped_line.replace('**', '').replace('__', '').replace('_', '')
-                text_clean = text_clean.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                
-                if text_clean:  # Only add non-empty text
-                    try:
-                        para = Paragraph(text_clean, normal_style)
-                        current_section.append(para)
-                    except Exception as ex:
-                        # If paragraph fails due to special chars, skip
-                        pass
-        
+                para = Paragraph(stripped_line, normal_style)
+                current_section.append(para)
+
         # Flush any remaining content
         if current_section:
             for item in current_section:
                 content.append(item)
-        
-        content.append(Spacer(1, 0.2*inch))
-        
+
         # Footer
-        footer_text = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} | Language: {language} | AI Cultural Tourism Engine"
-        try:
-            content.append(Paragraph(footer_text, info_style))
-        except:
-            pass
-        
-        # Build PDF with error handling
-        try:
-            doc.build(content)
-            pdf_buffer.seek(0)
-            return pdf_buffer
-        except Exception as build_error:
-            st.error(f"PDF build error: {str(build_error)}")
-            return None
-        
+        content.append(Spacer(1, 0.3*inch))
+        footer_text = f"Generated on {__import__('datetime').datetime.now().strftime('%B %d, %Y')}"
+        content.append(Paragraph(footer_text, info_style))
+
+        # Build PDF
+        doc.build(content)
+        pdf_buffer.seek(0)
+
+        return pdf_buffer
+
     except Exception as e:
-        st.error(f"Error generating PDF: {str(e)}")
-        import traceback
-        st.error(f"Traceback: {traceback.format_exc()}")
-        return None
+        raise Exception(f"PDF generation error: {str(e)}")
+
+
+# =========================
+# PDF HELPER FUNCTIONS
+# =========================
+def create_pdf_filename(city, country):
+    """Generate a filename for the PDF"""
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{city}_{country}_{timestamp}.pdf"
