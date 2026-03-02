@@ -6,7 +6,6 @@ google-generativeai
 firebase-admin
 python-dotenv
 pyttsx3
-moviepy
 Pillow
 imageio
 image-ffmpeg
