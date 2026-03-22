@@ -1162,74 +1162,101 @@ WRITE EVERYTHING IN FULL DETAIL. INCLUDE ALL {duration} DAYS COMPLETELY."""
 # =========================
 # VIDEO GENERATION FUNCTIONS
 # =========================
+
 def generate_video_caption(section_text, day_num, time_period):
-    fallback = f"Day {day_num} brought unforgettable {time_period.lower()} experiences in the city."
+    """
+    Improved version:
+    - Much stronger instructions against truncation
+    - Forces complete sentence
+    - Better length guidance (aiming ~18–35 words)
+    - Stronger cleaning logic
+    """
+    fallback = f"On day {day_num} we enjoyed beautiful moments in {time_period.lower()}."
 
     def clean_caption(text):
         if not text:
             return fallback
+
         text = text.strip()
-        # Remove Gemini's favorite lazy prefixes
-        text = re.sub(r'^(here|on this day|during|in|we|you|travelers).{0,15}:\s*', '', text, flags=re.I)
-        text = re.sub(r'^(caption|subtitle|line|text|voiceover):\s*', '', text, flags=re.I)
-        text = re.sub(r'[\*\"\'\#\U0001F000-\U0001FFFF]', '', text)          # no emojis / markdown
+
+        # Remove unwanted prefixes that Gemini sometimes adds anyway
+        text = re.sub(r'^(caption|subtitle|summary|voiceover|text|day\s*\d+|\w+\s*:)\s*[:\-]?\s*', '', text, flags=re.IGNORECASE)
+
+        # Remove markdown, quotes, hashtags, emojis
+        text = re.sub(r'[\*\#\"\'\“\”‘’„‟«»]|[\U0001F000-\U0001FFFF]', '', text)
+
+        # Normalize whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-        if text and text[-1] not in '.!?…':
+
+        # Force it to end with punctuation if missing
+        if text and text[-1] not in '.!?':
             text += "."
-        # Last-resort length trim — prefer sentence boundary
-        if len(text) > 135:
-            sentences = re.split(r'(?<=[.!?…])\s+', text)
+
+        # Hard truncate only as last resort — aim for readable length
+        if len(text) > 140:
+            sentences = re.split(r'(?<=[.!?])\s+', text)
             result = ""
-            for s in sentences:
-                if len(result + s) + 2 <= 135:
-                    result += s + " "
+            for sent in sentences:
+                if len(result) + len(sent) + 2 <= 140:
+                    result += sent + " "
                 else:
                     break
             text = result.strip()
-        return text if len(text) > 12 else fallback
+            if text.endswith(('.', '!', '?')):
+                pass
+            else:
+                text = text.rsplit(' ', 1)[0] + "…"
+
+        if len(text.strip(' .,!?')) < 10:
+            return fallback
+
+        return text.strip()
 
     if not GEMINI_AVAILABLE:
         return fallback
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash")   # ← prefer flash for speed
 
-        trimmed = section_text.strip()[:1100]
+        trimmed = section_text.strip()[:900]  # increased a bit — still safe
 
-        prompt = f"""Create ONE vivid, specific subtitle sentence for a travel video slide.
+        prompt = f"""You are creating a **single, beautiful subtitle line** for a travel video slideshow.
 
-Day: {day_num} • {time_period}
-Activity from itinerary:
-{trimmed}
+Context:
+- Day {day_num}
+- Time of day: {time_period}
+- Activity description: {trimmed}
 
-STRICT RULES — MUST FOLLOW ALL:
-• Write exactly one natural, flowing sentence (no lists, no fragments)
-• Make it specific to what actually happens in THIS section — mention real activities, places, food, feelings or details from the text
-• AVOID generic phrases like: "we explored", "enjoyed the beauty", "discovered the charm", "immersed in culture", "unforgettable moments"
-• Do NOT use: "on this day", "during the {time_period}", "in {city}", "travelers can", "you will"
-• Tone: warm, cinematic, personal, like a high-quality travel vlog narrator telling a story
-• Length: 22–42 words (ideal 26–34)
-• NO emojis, hashtags, quotes, prefixes like "Subtitle:", "Caption:"
-• Return ONLY the sentence — nothing else
+Rules — you MUST follow ALL of them:
+1. Write **exactly one complete sentence**
+2. The sentence must be **grammatically complete** — never cut off mid-sentence
+3. Length: 18–38 words (sweet spot ~24–30)
+4. Style: warm, cinematic, engaging, like a high-quality travel vlog voice-over
+5. Do NOT start with: Day, Morning, Afternoon, Evening, Lunch, We, In, At, On
+6. Do NOT include: hashtags, emojis, quotes, bullet points, numbering
+7. Do NOT write any prefix like "Caption:", "Subtitle:", "Text:"
+8. Return **ONLY the sentence itself** — nothing else
 
-Write the subtitle:"""
+Write the subtitle now:"""
 
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.82,     # ↑↑ more creative / less repetitive
-                top_p=0.94,
-                top_k=45,
-                max_output_tokens=160
+                temperature=0.68,
+                top_p=0.92,
+                top_k=40,
+                max_output_tokens=140,
             )
         )
 
-        if response and response.text.strip():
-            return clean_caption(response.text.strip())
+        if response and response.text:
+            caption = clean_caption(response.text.strip())
+            return caption
 
         return fallback
 
-    except Exception:
+    except Exception as e:
+        print("Subtitle generation failed:", str(e))
         return fallback
         
 def parse_itinerary_into_days(itinerary_text):
@@ -1359,64 +1386,69 @@ def parse_itinerary_into_days(itinerary_text):
 
 # VIDEO SUBTITLE RENDERING - PERMANENT FIX
 def render_subtitle_with_auto_wrapping(subtitle_text, video_width, video_height, clip_duration):
+    """
+    Render subtitles with automatic text wrapping and dynamic sizing.
+    Handles multi-line text without cutting off.
+    """
     import textwrap
-
-    # Adaptive font size — more conservative
-    tl = len(subtitle_text)
-    if tl < 50:
-        font_size = 32
-    elif tl < 85:
+    
+    # Dynamic font sizing based on text length
+    text_length = len(subtitle_text)
+    if text_length < 40:
         font_size = 28
-    elif tl < 120:
+    elif text_length < 80:
         font_size = 24
-    elif tl < 160:
+    elif text_length < 120:
         font_size = 20
-    else:
+    elif text_length < 160:
         font_size = 18
-
-    # Estimate lines more accurately
-    max_chars_per_line = int((video_width - 140) / (font_size * 0.55))   # tighter but safer
-    wrapped = textwrap.wrap(subtitle_text, width=max_chars_per_line)
-    line_count = len(wrapped)
-
-    # More generous padding & height
-    line_height = font_size + 8
-    text_block_height = line_count * line_height + 40   # extra padding
-    bar_height = max(140, text_block_height + 60)       # minimum 140px + padding
-
+    else:
+        font_size = 16
+    
+    # Calculate dynamic subtitle bar height based on expected wrapping
+    # Start with minimum height
+    min_subtitle_height = 120
+    
+    # Estimate lines needed (accounting for video width constraints)
+    chars_per_line = max(40, (video_width - 100) // (font_size // 2))
+    estimated_lines = max(1, (len(subtitle_text) + chars_per_line - 1) // chars_per_line)
+    
+    # Dynamic height: add 30 pixels per expected line, plus padding
+    dynamic_height = 60 + (estimated_lines * (font_size + 10))
+    subtitle_bar_height = max(min_subtitle_height, min(dynamic_height, video_height // 3))
+    
     try:
-        # Background — semi-transparent, taller
+        # Black background bar with proper height
         subtitle_bg = (
-            ColorClip(size=(video_width, bar_height), color=(0, 0, 0))
-            .set_duration(clip_duration)
-            .set_opacity(0.78)
-            .set_position(("center", video_height - bar_height))
+            ColorClip(size=(video_width, subtitle_bar_height), color=(0, 0, 0))
+            .with_duration(clip_duration)
+            .with_opacity(0.75)
+            .with_position((0, video_height - subtitle_bar_height))
         )
-
-        # Text — center vertically inside bar with more top padding
-        subtitle = TextClip(
-            txt=subtitle_text,
-            fontsize=font_size,
-            color='white',
-            font='Arial-Bold',          # ← fallback safe font
-            method='caption',
-            align='center',
-            size=(video_width - 140, None),   # generous side padding
-            transparent=True
-        ).set_duration(clip_duration)
-
-        # Position text higher in the bar
-        text_y = video_height - bar_height + 30   # more top padding
-
-        subtitle = subtitle.set_position(("center", text_y))
-
-        return CompositeVideoClip(
+        
+        # Text with GENEROUS padding and no size constraint
+        subtitle = (
+            TextClip(
+                text=subtitle_text,
+                font_size=font_size,
+                color="white",
+                method="caption",
+                size=(video_width - 80, None),  # None height = auto-wrap to fit
+            )
+            .with_duration(clip_duration)
+            .with_position(("center", video_height - subtitle_bar_height + (subtitle_bar_height - font_size - 20) // 2))
+        )
+        
+        # Composite with proper dimensions
+        composite = CompositeVideoClip(
             [subtitle_bg, subtitle],
             size=(video_width, video_height)
         )
-
+        
+        return composite
+        
     except Exception as e:
-        print("Subtitle render failed:", str(e))
+        print(f"Subtitle rendering error: {e}")
         return None
 
 
