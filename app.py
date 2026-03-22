@@ -1164,147 +1164,170 @@ WRITE EVERYTHING IN FULL DETAIL. INCLUDE ALL {duration} DAYS COMPLETELY."""
 # =========================
 
 def generate_video_caption(section_text, day_num, time_period):
-    """Use Gemini to generate a short natural subtitle for one itinerary section"""
+    """Use Gemini to generate a short, complete subtitle for one itinerary section"""
     fallback = f"Exploring the highlights of Day {day_num}"
- 
+    
     def clean_caption(text):
         if not text:
             return fallback
- 
+        
         text = text.strip().replace("\n", " ")
         text = text.replace('"', '').replace("'", "")
         text = re.sub(r'\s+', ' ', text).strip()
- 
+        
         # Remove any label prefixes Gemini might add
         text = re.sub(r'^(caption|subtitle|summary|day\s*\d+|morning|lunch|afternoon|evening)\s*[:\-]\s*', '', text, flags=re.IGNORECASE)
- 
+        
         # Strip bullets / numbering
         text = re.sub(r'^[\-\*\d\.\)\s]+', '', text).strip()
- 
-        # Soft wrap at word boundary around 90 chars — don't hard-cut mid-word
-        if len(text) > 90:
-            cut = text[:90]
-            last_space = cut.rfind(" ")
-            if last_space > 60:
-                text = cut[:last_space].rstrip() + "..."
+        
+        # Better text wrapping: respect sentence boundaries
+        # Allow up to 120 chars instead of 90 to accommodate full sentences
+        if len(text) > 120:
+            # Try to cut at a sentence boundary first
+            sentences = text.split('. ')
+            combined = ""
+            for sentence in sentences:
+                if len(combined) + len(sentence) + 2 <= 120:  # +2 for ". "
+                    combined += sentence + ". " if combined else sentence + ". "
+                else:
+                    break
+            
+            if combined and len(combined) > 10:
+                text = combined.rstrip('. ') + "."
             else:
-                text = cut.rstrip() + "..."
- 
+                # Fallback to word boundary if no sentence breaks work
+                cut = text[:120]
+                last_space = cut.rfind(" ")
+                if last_space > 60:
+                    text = cut[:last_space].rstrip() + "."
+                else:
+                    text = cut.rstrip() + "."
+        
         if len(text) < 8:
             return fallback
- 
+        
         return text
- 
+    
     if not GEMINI_AVAILABLE:
         return fallback
- 
+    
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
- 
-        # Trim the section text so we don't waste tokens, but keep enough for context
-        trimmed_section = section_text.strip()[:400]
- 
+        
+        # Trim the section text to keep token usage reasonable
+        trimmed_section = section_text.strip()[:500]  # Increased from 400 to 500
+        
         prompt = f"""You are writing a subtitle line for a travel recap video slide.
- 
+
 The slide shows: Day {day_num}, {time_period}
- 
+
 Itinerary content for this slide:
 {trimmed_section}
- 
+
 Write ONE subtitle sentence that:
 - Summarises what the traveller will experience in this moment
 - Reads naturally as a video caption (not a bullet point, not a heading)
-- Is between 10 and 20 words long
+- Is between 12 and 25 words long (IMPORTANT: write complete sentences, no cut-offs)
 - Contains NO hashtags, NO emojis, NO quotation marks, NO labels like "Caption:"
 - Does NOT start with "Day", "Morning", "Lunch", "Afternoon", or "Evening"
-- Is a complete sentence, not cut off mid-way
- 
-Return only the caption sentence and nothing else."""
- 
+- MUST be a complete, grammatically correct sentence that is NOT cut off mid-way
+- Should be visually interesting and engaging
+
+Return only the caption sentence and nothing else. DOUBLE CHECK that your response is a complete sentence."""
+        
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.65,
-                max_output_tokens=80,
+                max_output_tokens=100,  # Increased from 80 to allow more complete responses
             )
         )
- 
+        
         if response and response.text:
             caption = clean_caption(response.text)
             return caption
- 
+        
         return fallback
- 
+    
     except Exception:
         return fallback
         
 def parse_itinerary_into_days(itinerary_text):
     """Parse itinerary text into day-wise video data with AI-generated captions"""
     days_data = []
- 
+    
     day_pattern = r'\*\*Day\s+(\d+)\s*-\s*([^*]+)\*\*'
     day_matches = list(re.finditer(day_pattern, itinerary_text))
- 
+    
     if not day_matches:
         alt_pattern = r'Day\s+(\d+)\s*-\s*(.+)'
         alt_matches = list(re.finditer(alt_pattern, itinerary_text))
         if not alt_matches:
             return []
         day_matches = alt_matches
- 
+    
     video_periods = ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:']
- 
+    
     def clean_text(text):
         text = re.sub(r'\s+', ' ', text).strip()
         text = text.replace('*', '').replace('#', '')
         return text
- 
+    
     def extract_location_name(content, fallback):
+        """Extract a meaningful location name from itinerary content"""
         content = clean_text(content)
+        
+        # Better location extraction: look for actual location names
+        # Remove common action words at the start
+        content = re.sub(r'^(visit|explore|discover|enjoy|experience|wander|walk|tour|see)\s+', '', content, flags=re.IGNORECASE)
+        
         first_sentence = content.split('.')[0].strip() if '.' in content else content
-        first_sentence = re.sub(r'\([^)]*\)', '', first_sentence).strip()
- 
+        first_sentence = re.sub(r'$$[^)]*$$', '', first_sentence).strip()
+        
         words = first_sentence.split()
-        if len(words) >= 4:
-            return " ".join(words[:4]).strip()
+        
+        # Get up to 5 words for richer location names
+        if len(words) >= 5:
+            return " ".join(words[:5]).strip()
         elif first_sentence:
-            return first_sentence[:40].strip()
+            return first_sentence[:50].strip()
         else:
             return fallback
- 
+    
     for i, match in enumerate(day_matches):
         day_num = match.group(1)
         day_title = match.group(2).strip()
- 
+        
         start = match.end()
         end = day_matches[i + 1].start() if i + 1 < len(day_matches) else len(itinerary_text)
         day_content = itinerary_text[start:end].strip()
- 
+        
         locations = []
- 
+        
         for period in video_periods:
             if period in day_content:
                 start_idx = day_content.find(period)
                 next_period_idx = len(day_content)
- 
+                
                 for next_period in video_periods + ['Budget Tip:', 'Local Insight:', 'Tips:']:
                     found_idx = day_content.find(next_period, start_idx + len(period))
                     if found_idx != -1 and found_idx < next_period_idx:
                         next_period_idx = found_idx
- 
+                
                 content = day_content[start_idx + len(period):next_period_idx].strip()
- 
+                
                 if content:
                     location_name = extract_location_name(content, day_title)
                     ai_caption = generate_video_caption(content, day_num, period.replace(':', ''))
- 
+                    
                     locations.append({
                         "time_period": period.replace(':', ''),
                         "location": location_name,
                         "caption": ai_caption,
                         "description": content
                     })
- 
+        
         if not locations:
             fallback_caption = generate_video_caption(day_content or day_title, day_num, "Day Recap")
             locations = [{
@@ -1313,13 +1336,13 @@ def parse_itinerary_into_days(itinerary_text):
                 "caption": fallback_caption,
                 "description": day_content
             }]
- 
+        
         days_data.append({
             "day_num": day_num,
             "day_title": day_title,
             "locations": locations
         })
- 
+    
     return days_data
 
 def fetch_pexels_image(query, filename, page=1):
