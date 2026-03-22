@@ -1164,185 +1164,224 @@ WRITE EVERYTHING IN FULL DETAIL. INCLUDE ALL {duration} DAYS COMPLETELY."""
 # =========================
 
 def generate_video_caption(section_text, day_num, time_period):
-    """Use Gemini to generate a short, complete subtitle for one itinerary section"""
-    fallback = f"Exploring the highlights of Day {day_num}"
-    
+    """
+    Improved version:
+    - Much stronger instructions against truncation
+    - Forces complete sentence
+    - Better length guidance (aiming ~18–35 words)
+    - Stronger cleaning logic
+    """
+    fallback = f"On day {day_num} we enjoyed beautiful moments in {time_period.lower()}."
+
     def clean_caption(text):
         if not text:
             return fallback
-        
-        text = text.strip().replace("\n", " ")
-        text = text.replace('"', '').replace("'", "")
+
+        text = text.strip()
+
+        # Remove unwanted prefixes that Gemini sometimes adds anyway
+        text = re.sub(r'^(caption|subtitle|summary|voiceover|text|day\s*\d+|\w+\s*:)\s*[:\-]?\s*', '', text, flags=re.IGNORECASE)
+
+        # Remove markdown, quotes, hashtags, emojis
+        text = re.sub(r'[\*\#\"\'\“\”‘’„‟«»]|[\U0001F000-\U0001FFFF]', '', text)
+
+        # Normalize whitespace
         text = re.sub(r'\s+', ' ', text).strip()
-        
-        # Remove any label prefixes Gemini might add
-        text = re.sub(r'^(caption|subtitle|summary|day\s*\d+|morning|lunch|afternoon|evening)\s*[:\-]\s*', '', text, flags=re.IGNORECASE)
-        
-        # Strip bullets / numbering
-        text = re.sub(r'^[\-\*\d\.\)\s]+', '', text).strip()
-        
-        # Better text wrapping: respect sentence boundaries
-        # Allow up to 120 chars instead of 90 to accommodate full sentences
-        if len(text) > 120:
-            # Try to cut at a sentence boundary first
-            sentences = text.split('. ')
-            combined = ""
-            for sentence in sentences:
-                if len(combined) + len(sentence) + 2 <= 120:  # +2 for ". "
-                    combined += sentence + ". " if combined else sentence + ". "
+
+        # Force it to end with punctuation if missing
+        if text and text[-1] not in '.!?':
+            text += "."
+
+        # Hard truncate only as last resort — aim for readable length
+        if len(text) > 140:
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            result = ""
+            for sent in sentences:
+                if len(result) + len(sent) + 2 <= 140:
+                    result += sent + " "
                 else:
                     break
-            
-            if combined and len(combined) > 10:
-                text = combined.rstrip('. ') + "."
+            text = result.strip()
+            if text.endswith(('.', '!', '?')):
+                pass
             else:
-                # Fallback to word boundary if no sentence breaks work
-                cut = text[:120]
-                last_space = cut.rfind(" ")
-                if last_space > 60:
-                    text = cut[:last_space].rstrip() + "."
-                else:
-                    text = cut.rstrip() + "."
-        
-        if len(text) < 8:
+                text = text.rsplit(' ', 1)[0] + "…"
+
+        if len(text.strip(' .,!?')) < 10:
             return fallback
-        
-        return text
-    
+
+        return text.strip()
+
     if not GEMINI_AVAILABLE:
         return fallback
-    
+
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        
-        # Trim the section text to keep token usage reasonable
-        trimmed_section = section_text.strip()[:500]  # Increased from 400 to 500
-        
-        prompt = f"""You are writing a subtitle line for a travel recap video slide.
+        model = genai.GenerativeModel("gemini-1.5-flash")   # ← prefer flash for speed
 
-The slide shows: Day {day_num}, {time_period}
+        trimmed = section_text.strip()[:900]  # increased a bit — still safe
 
-Itinerary content for this slide:
-{trimmed_section}
+        prompt = f"""You are creating a **single, beautiful subtitle line** for a travel video slideshow.
 
-Write ONE subtitle sentence that:
-- Summarises what the traveller will experience in this moment
-- Reads naturally as a video caption (not a bullet point, not a heading)
-- Is between 12 and 25 words long (IMPORTANT: write complete sentences, no cut-offs)
-- Contains NO hashtags, NO emojis, NO quotation marks, NO labels like "Caption:"
-- Does NOT start with "Day", "Morning", "Lunch", "Afternoon", or "Evening"
-- MUST be a complete, grammatically correct sentence that is NOT cut off mid-way
-- Should be visually interesting and engaging
+Context:
+- Day {day_num}
+- Time of day: {time_period}
+- Activity description: {trimmed}
 
-Return only the caption sentence and nothing else. DOUBLE CHECK that your response is a complete sentence."""
-        
+Rules — you MUST follow ALL of them:
+1. Write **exactly one complete sentence**
+2. The sentence must be **grammatically complete** — never cut off mid-sentence
+3. Length: 18–38 words (sweet spot ~24–30)
+4. Style: warm, cinematic, engaging, like a high-quality travel vlog voice-over
+5. Do NOT start with: Day, Morning, Afternoon, Evening, Lunch, We, In, At, On
+6. Do NOT include: hashtags, emojis, quotes, bullet points, numbering
+7. Do NOT write any prefix like "Caption:", "Subtitle:", "Text:"
+8. Return **ONLY the sentence itself** — nothing else
+
+Write the subtitle now:"""
+
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
-                temperature=0.65,
-                max_output_tokens=100,  # Increased from 80 to allow more complete responses
+                temperature=0.68,
+                top_p=0.92,
+                top_k=40,
+                max_output_tokens=140,
             )
         )
-        
+
         if response and response.text:
-            caption = clean_caption(response.text)
+            caption = clean_caption(response.text.strip())
             return caption
-        
+
         return fallback
-    
-    except Exception:
+
+    except Exception as e:
+        print("Subtitle generation failed:", str(e))
         return fallback
         
 def parse_itinerary_into_days(itinerary_text):
-    """Parse itinerary text into day-wise video data with AI-generated captions"""
+    """
+    More robust parsing:
+    - Better handling of different Gemini formatting styles
+    - Creates at least one caption per day even if sections are missing
+    - Smarter period extraction
+    """
     days_data = []
-    
-    day_pattern = r'\*\*Day\s+(\d+)\s*-\s*([^*]+)\*\*'
-    day_matches = list(re.finditer(day_pattern, itinerary_text))
-    
-    if not day_matches:
-        alt_pattern = r'Day\s+(\d+)\s*-\s*(.+)'
-        alt_matches = list(re.finditer(alt_pattern, itinerary_text))
-        if not alt_matches:
-            return []
-        day_matches = alt_matches
-    
-    video_periods = ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:']
-    
-    def clean_text(text):
-        text = re.sub(r'\s+', ' ', text).strip()
-        text = text.replace('*', '').replace('#', '')
-        return text
-    
-    def extract_location_name(content, fallback):
-        """Extract a meaningful location name from itinerary content"""
-        content = clean_text(content)
-        
-        # Better location extraction: look for actual location names
-        # Remove common action words at the start
-        content = re.sub(r'^(visit|explore|discover|enjoy|experience|wander|walk|tour|see)\s+', '', content, flags=re.IGNORECASE)
-        
-        first_sentence = content.split('.')[0].strip() if '.' in content else content
-        first_sentence = re.sub(r'$$[^)]*$$', '', first_sentence).strip()
-        
-        words = first_sentence.split()
-        
-        # Get up to 5 words for richer location names
-        if len(words) >= 5:
-            return " ".join(words[:5]).strip()
-        elif first_sentence:
-            return first_sentence[:50].strip()
-        else:
-            return fallback
-    
-    for i, match in enumerate(day_matches):
-        day_num = match.group(1)
-        day_title = match.group(2).strip()
-        
-        start = match.end()
-        end = day_matches[i + 1].start() if i + 1 < len(day_matches) else len(itinerary_text)
-        day_content = itinerary_text[start:end].strip()
-        
-        locations = []
-        
-        for period in video_periods:
-            if period in day_content:
-                start_idx = day_content.find(period)
-                next_period_idx = len(day_content)
-                
-                for next_period in video_periods + ['Budget Tip:', 'Local Insight:', 'Tips:']:
-                    found_idx = day_content.find(next_period, start_idx + len(period))
-                    if found_idx != -1 and found_idx < next_period_idx:
-                        next_period_idx = found_idx
-                
-                content = day_content[start_idx + len(period):next_period_idx].strip()
-                
-                if content:
-                    location_name = extract_location_name(content, day_title)
-                    ai_caption = generate_video_caption(content, day_num, period.replace(':', ''))
-                    
-                    locations.append({
-                        "time_period": period.replace(':', ''),
-                        "location": location_name,
-                        "caption": ai_caption,
-                        "description": content
-                    })
-        
-        if not locations:
-            fallback_caption = generate_video_caption(day_content or day_title, day_num, "Day Recap")
-            locations = [{
-                "time_period": "All Day",
-                "location": day_title,
-                "caption": fallback_caption,
-                "description": day_content
+
+    # Try multiple patterns to catch different Gemini outputs
+    patterns = [
+        r'\*\*Day\s+(\d+)\s*-\s*([^*]+?)\*\*',
+        r'Day\s+(\d+)\s*-\s*([^\n:]+)',
+        r'Day\s+(\d+)(?::|\s*-|\s+)[\s\n]*([^\n]+)',
+    ]
+
+    day_blocks = []
+    for pattern in patterns:
+        matches = list(re.finditer(pattern, itinerary_text, re.IGNORECASE))
+        if len(matches) >= 1:
+            day_blocks = matches
+            break
+
+    if not day_blocks:
+        # Fallback: treat whole text as one big day
+        caption = generate_video_caption(itinerary_text[:1200], "1", "Complete Journey")
+        days_data.append({
+            "day_num": "1",
+            "day_title": "Your Journey",
+            "locations": [{
+                "time_period": "Full Trip",
+                "location": "Highlights",
+                "caption": caption,
+                "description": itinerary_text.strip()
             }]
-        
+        })
+        return days_data
+
+    video_periods = ['Morning:', 'Lunch:', 'Afternoon:', 'Evening:', 'Dinner:']
+
+    for i, match in enumerate(day_blocks):
+        day_num = match.group(1)
+        day_title = (match.group(2) or f"Day {day_num}").strip()
+
+        start = match.end()
+        end = day_blocks[i + 1].start() if i + 1 < len(day_blocks) else len(itinerary_text)
+        day_content = itinerary_text[start:end].strip()
+
+        if not day_content:
+            caption = generate_video_caption(day_title, day_num, "Full Day")
+            days_data.append({
+                "day_num": day_num,
+                "day_title": day_title,
+                "locations": [{
+                    "time_period": "Full Day",
+                    "location": day_title,
+                    "caption": caption,
+                    "description": day_title
+                }]
+            })
+            continue
+
+        locations = []
+
+        # Try to split into periods
+        period_positions = []
+        for period in video_periods:
+            pos = day_content.find(period)
+            if pos != -1:
+                period_positions.append((pos, period))
+
+        period_positions.sort(key=lambda x: x[0])
+
+        if not period_positions:
+            # No clear periods → treat whole day as one slide
+            caption = generate_video_caption(day_content, day_num, "Full Day")
+            loc_name = day_title if len(day_title) < 40 else "Day Overview"
+            locations.append({
+                "time_period": "Full Day",
+                "location": loc_name,
+                "caption": caption,
+                "description": day_content
+            })
+        else:
+            for j, (start_pos, period_label) in enumerate(period_positions):
+                end_pos = period_positions[j + 1][0] if j + 1 < len(period_positions) else len(day_content)
+
+                content = day_content[start_pos + len(period_label):end_pos].strip()
+
+                if not content.strip():
+                    continue
+
+                # Try to extract a nice location name
+                loc_name = "Highlight"
+                first_line = content.split('\n', 1)[0].strip()
+                if first_line and len(first_line) < 60:
+                    loc_name = re.sub(r'^(visit|go to|head to|enjoy|experience)\s+', '', first_line, flags=re.I).strip('.,')
+
+                caption = generate_video_caption(content, day_num, period_label.rstrip(':'))
+
+                locations.append({
+                    "time_period": period_label.rstrip(':'),
+                    "location": loc_name,
+                    "caption": caption,
+                    "description": content
+                })
+
+        # Guarantee at least one slide per day
+        if not locations:
+            caption = generate_video_caption(day_content or day_title, day_num, "Day Recap")
+            locations = [{
+                "time_period": "Day Recap",
+                "location": day_title,
+                "caption": caption,
+                "description": day_content or day_title
+            }]
+
         days_data.append({
             "day_num": day_num,
             "day_title": day_title,
             "locations": locations
         })
-    
+
     return days_data
 
 # VIDEO SUBTITLE RENDERING - PERMANENT FIX
