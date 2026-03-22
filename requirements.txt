@@ -6,6 +6,6 @@ google-generativeai
 firebase-admin
 python-dotenv
 pyttsx3
-Pillow
-imageio
-imageio-ffmpeg
+moviepy
+pyrebase4
+streamlit-oauth
