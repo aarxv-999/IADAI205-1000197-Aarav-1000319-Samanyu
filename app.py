@@ -1345,6 +1345,74 @@ def parse_itinerary_into_days(itinerary_text):
     
     return days_data
 
+# VIDEO SUBTITLE RENDERING - PERMANENT FIX
+def render_subtitle_with_auto_wrapping(subtitle_text, video_width, video_height, clip_duration):
+    """
+    Render subtitles with automatic text wrapping and dynamic sizing.
+    Handles multi-line text without cutting off.
+    """
+    import textwrap
+    
+    # Dynamic font sizing based on text length
+    text_length = len(subtitle_text)
+    if text_length < 40:
+        font_size = 28
+    elif text_length < 80:
+        font_size = 24
+    elif text_length < 120:
+        font_size = 20
+    elif text_length < 160:
+        font_size = 18
+    else:
+        font_size = 16
+    
+    # Calculate dynamic subtitle bar height based on expected wrapping
+    # Start with minimum height
+    min_subtitle_height = 120
+    
+    # Estimate lines needed (accounting for video width constraints)
+    chars_per_line = max(40, (video_width - 100) // (font_size // 2))
+    estimated_lines = max(1, (len(subtitle_text) + chars_per_line - 1) // chars_per_line)
+    
+    # Dynamic height: add 30 pixels per expected line, plus padding
+    dynamic_height = 60 + (estimated_lines * (font_size + 10))
+    subtitle_bar_height = max(min_subtitle_height, min(dynamic_height, video_height // 3))
+    
+    try:
+        # Black background bar with proper height
+        subtitle_bg = (
+            ColorClip(size=(video_width, subtitle_bar_height), color=(0, 0, 0))
+            .with_duration(clip_duration)
+            .with_opacity(0.75)
+            .with_position((0, video_height - subtitle_bar_height))
+        )
+        
+        # Text with GENEROUS padding and no size constraint
+        subtitle = (
+            TextClip(
+                text=subtitle_text,
+                font_size=font_size,
+                color="white",
+                method="caption",
+                size=(video_width - 80, None),  # None height = auto-wrap to fit
+            )
+            .with_duration(clip_duration)
+            .with_position(("center", video_height - subtitle_bar_height + (subtitle_bar_height - font_size - 20) // 2))
+        )
+        
+        # Composite with proper dimensions
+        composite = CompositeVideoClip(
+            [subtitle_bg, subtitle],
+            size=(video_width, video_height)
+        )
+        
+        return composite
+        
+    except Exception as e:
+        print(f"Subtitle rendering error: {e}")
+        return None
+
+
 def fetch_pexels_image(query, filename, page=1):
     """Fetch image from Pexels API and save locally"""
     try:
@@ -1495,32 +1563,23 @@ def generate_itinerary_video(itinerary_text, city, country, user_input):
                     subtitle_text = re.sub(r'\s+', ' ', subtitle_text).strip()
  
                     try:
-                        subtitle_bg = (
-                            ColorClip(size=(video_width, subtitle_bar_height), color=(0, 0, 0))
-                            .with_duration(clip_duration)
-                            .with_opacity(0.70)
-                            .with_position((0, video_height - subtitle_bar_height))
+                        subtitle_composite = render_subtitle_with_auto_wrapping(
+                            subtitle_text, 
+                            video_width, 
+                            video_height, 
+                            clip_duration
                         )
- 
-                        subtitle = (
-                            TextClip(
-                                text=subtitle_text,
-                                font_size=22,
-                                color="white",
-                                method="caption",                        # wraps automatically
-                                size=(video_width - 60, subtitle_bar_height - 20),  # wider box
+    
+                        if subtitle_composite:
+                            clip = CompositeVideoClip(
+                                [base_clip, subtitle_composite],
+                                size=(video_width, video_height)
                             )
-                            .with_duration(clip_duration)
-                            .with_position(("center", video_height - subtitle_bar_height + 10))
-                        )
- 
-                        clip = CompositeVideoClip(
-                            [base_clip, subtitle_bg, subtitle],
-                            size=(video_width, video_height)
-                        )
+                        else:
+                            clip = base_clip
                     except Exception:
                         clip = base_clip
- 
+                        
                     image_clips.append(clip)
  
                 except Exception as clip_error:
