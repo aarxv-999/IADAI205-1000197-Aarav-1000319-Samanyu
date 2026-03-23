@@ -27,3 +27,13 @@ To address this issue, our project aims to build an AI powered Cultural Tourism 
 
 - Aarav Agarwal: Focusing on UI/UX, frontend development, and documentation. Responsibilities include Streamlit UI design, user input forms, navigation structure, README.md, and overall documentation
 - Samanyu H: Focusing on Data & Backend Development. Responsibilities include dataset collection, cleaning & preprocessing, EDA, logic, feedback logging, and deployment support. 
+
+## Tech Stack
+The project is built using the tools as follows:
+- Python 
+- Streamlit 
+- Pandas 
+- NumPy 
+- Google Generative AI
+- ReportLab (PDF)
+- MoviePy (video) 
