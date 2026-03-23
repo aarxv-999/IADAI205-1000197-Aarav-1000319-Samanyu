@@ -119,6 +119,9 @@ def initialize_session_state():
     if 'current_itinerary' not in st.session_state:
         st.session_state.current_itinerary = None
     
+    if 'current_itinerary_id' not in st.session_state:
+        st.session_state.current_itinerary_id = None
+    
     if 'current_city' not in st.session_state:
         st.session_state.current_city = None
     
@@ -235,9 +238,6 @@ def initialize_firebase_auth():
         FIREBASE_API_KEY = st.secrets.get("FIREBASE_API_KEY", None)
         FIREBASE_PROJECT_ID = st.secrets.get("FIREBASE_PROJECT_ID", None)
 
-        st.write("DEBUG API KEY:", FIREBASE_API_KEY)
-        st.write("DEBUG PROJECT ID:", FIREBASE_PROJECT_ID)
-
         # ✅ CHECK ACTUAL VALUES (not key existence)
         if FIREBASE_API_KEY and len(FIREBASE_API_KEY) > 10:
             if FIREBASE_PROJECT_ID and len(FIREBASE_PROJECT_ID) > 3:
@@ -329,11 +329,7 @@ def save_feedback_to_firebase(module, feedback_type, target, value, metadata=Non
         
         user_id = st.session_state.get("user_id")
 
-        # DEBUG LINE
-        print("DEBUG USER_ID:", user_id)
-
         if not user_id or user_id == "":
-            st.error("❌ DEBUG: user_id missing. Feedback NOT saved.")
             print("ERROR: user_id missing in session_state")
             return False
 
@@ -549,12 +545,8 @@ def clean_text_for_pdf(text):
 def sign_up(email, password, name):
     """Sign up a new user with Firebase REST API"""
     try:
-        print(f"[v0] DEBUG: Sign up attempt for {email}")
-        print(f"[v0] DEBUG: FIREBASE_AUTH_AVAILABLE={FIREBASE_AUTH_AVAILABLE}, FIREBASE_API_KEY set={bool(FIREBASE_API_KEY)}")
-        
         if not FIREBASE_AUTH_AVAILABLE or not FIREBASE_API_KEY:
             msg = "Firebase not configured. Add FIREBASE_API_KEY to .streamlit/secrets.toml"
-            print(f"[v0] DEBUG: {msg}")
             return False, msg
         
         # Firebase REST API endpoint for sign up
@@ -566,22 +558,13 @@ def sign_up(email, password, name):
             "returnSecureToken": True
         }
         
-        print(f"[v0] DEBUG: Calling Firebase signup endpoint")
         response = requests.post(url, json=payload, timeout=10)
-        print(f"[v0] DEBUG: Firebase response status: {response.status_code}")
-        
-        # Show debug info on UI
-        st.write("DEBUG STATUS:", response.status_code)
-        st.write("DEBUG TEXT:", response.text)
         
         # Try to parse JSON response
         try:
             data = response.json()
         except:
-            st.error(f"Non-JSON response: {response.text}")
             return False, f"Non-JSON response: {response.text}"
-        
-        print(f"[v0] DEBUG: Firebase response: {data}")
         
         if response.status_code == 200:
             user_id = data['localId']
@@ -631,10 +614,6 @@ def sign_in(email, password):
         }
         
         response = requests.post(url, json=payload, timeout=10)
-        
-        # Show debug info on UI
-        st.write("DEBUG STATUS:", response.status_code)
-        st.write("DEBUG TEXT:", response.text)
         
         # Try to parse JSON response
         try:
@@ -1935,6 +1914,24 @@ def generate_itinerary_pdf(city, country, weather, season, itinerary_text, city_
         except:
             pass
         
+        # ADD FEEDBACK LINK AT END OF PDF
+        content.append(Spacer(1, 0.3*inch))
+        content.append(Paragraph("━" * 80, info_style))
+        content.append(Spacer(1, 0.15*inch))
+        
+        feedback_link_text = """
+        <b>Share Your Feedback 📝</b><br/><br/>
+        We'd love to hear your thoughts about this itinerary!<br/>
+        Visit our feedback page to rate this itinerary and share your comments.<br/><br/>
+        <u>Itinerary ID: {}</u><br/>
+        Use this ID to access and rate this specific itinerary on our platform.
+        """.format(st.session_state.current_itinerary_id if st.session_state.current_itinerary_id else "N/A")
+        
+        try:
+            content.append(Paragraph(feedback_link_text, normal_style))
+        except:
+            pass
+        
         try:
             doc.build(content)
             pdf_buffer.seek(0)
@@ -2394,12 +2391,118 @@ def itinerary_page():
     st.title("📅 Itinerary Generator")
     st.markdown("---")
     
+    # Initialize session state for loaded itinerary
+    if 'loaded_itinerary_data' not in st.session_state:
+        st.session_state.loaded_itinerary_data = None
+    if 'loaded_itinerary_id' not in st.session_state:
+        st.session_state.loaded_itinerary_id = None
+    
+    # =========================
+    # RATE EXISTING ITINERARY BY ID (Always Available)
+    # =========================
+    st.markdown("### Load Itinerary from ID")
+    st.write("Have an itinerary ID from a PDF? Enter it below to load and rate that itinerary.")
+    
+    col_input, col_load = st.columns([3, 1])
+    
+    with col_input:
+        itinerary_id_input = st.text_input(
+            "Enter Itinerary ID",
+            placeholder="Paste the itinerary ID from the PDF",
+            key="itinerary_id_lookup_input"
+        )
+    
+    with col_load:
+        st.write("")  # Spacing
+        load_itinerary = st.button("Load Itinerary", type="primary", use_container_width=True, key="load_itinerary_btn")
+    
+    if load_itinerary and itinerary_id_input:
+        if not FIREBASE_AVAILABLE or not db:
+            st.error("Firebase not available. Cannot load itinerary.")
+        else:
+            try:
+                # Query Firestore for the itinerary
+                itinerary_doc = db.collection("itineraries").document(itinerary_id_input).get()
+                
+                if itinerary_doc.exists:
+                    # Store in session state for persistence
+                    st.session_state.loaded_itinerary_data = itinerary_doc.to_dict()
+                    st.session_state.loaded_itinerary_id = itinerary_id_input
+                    st.success(f"Itinerary loaded: {st.session_state.loaded_itinerary_data.get('city', 'Unknown')}")
+                    st.rerun()
+                else:
+                    st.error("Itinerary not found. Please check the ID and try again.")
+            except Exception as e:
+                st.error(f"Error loading itinerary: {str(e)}")
+                print(f"Firestore lookup error: {str(e)}")
+    
+    # Display loaded itinerary if it exists in session state
+    if st.session_state.loaded_itinerary_data is not None:
+        loaded_itinerary = st.session_state.loaded_itinerary_data
+        
+        st.markdown("---")
+        st.markdown("### Loaded Itinerary Preview")
+        
+        # Show basic info
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**City:** {loaded_itinerary.get('city', 'N/A')}")
+            st.write(f"**Country:** {loaded_itinerary.get('country', 'N/A')}")
+        with col2:
+            created_date = loaded_itinerary.get('created_at', 'Unknown')
+            st.write(f"**Created:** {created_date}")
+        
+        # Show itinerary text
+        with st.expander("View Full Itinerary"):
+            st.write(loaded_itinerary.get('itinerary_text', 'No itinerary text available'))
+        
+        st.markdown("---")
+        st.markdown("### Rate This Itinerary")
+        
+        # Rating input for loaded itinerary
+        loaded_rating = st.slider(
+            "How would you rate this itinerary?",
+            min_value=1,
+            max_value=5,
+            value=3,
+            key="loaded_itinerary_rating_slider"
+        )
+        
+        loaded_feedback_text = st.text_area(
+            "Additional comments (optional):",
+            placeholder="Share your thoughts about this itinerary...",
+            height=100,
+            key="loaded_itinerary_feedback_text"
+        )
+        
+        if st.button("Submit Feedback for This Itinerary", type="secondary", use_container_width=True, key="submit_loaded_itinerary_feedback_btn"):
+            success = save_feedback_to_firebase(
+                module="itinerary",
+                feedback_type="rating",
+                target=f"{loaded_itinerary.get('city', 'Unknown')}, {loaded_itinerary.get('country', 'Unknown')}",
+                value=loaded_rating,
+                metadata={
+                    "text": loaded_feedback_text,
+                    "itinerary_id": st.session_state.loaded_itinerary_id,
+                    "feedback_source": "existing_itinerary"
+                }
+            )
+            if success:
+                st.success("Thank you for your feedback on this itinerary!")
+                st.session_state.loaded_itinerary_data = None
+                st.session_state.loaded_itinerary_id = None
+            else:
+                st.warning("Could not save feedback. Please ensure you are logged in.")
+    
+    st.markdown("---")
+    st.markdown("### Create New Itinerary")
+    
     # Use cached results if needed
     if st.session_state.ranked_results is None:
         if st.session_state.cached_ranked_results is not None:
             st.session_state.ranked_results = st.session_state.cached_ranked_results
         else:
-            st.info("Complete the **Personalization** step first.")
+            st.info("Complete the **Personalization** step first to create a new itinerary.")
             return
     
     ranked = st.session_state.ranked_results
@@ -2483,9 +2586,26 @@ def itinerary_page():
             # Clean the itinerary for PDF export (remove emojis and special chars)
             cleaned_itinerary = clean_text_for_pdf(itinerary)
             
+            # Generate unique itinerary ID and save to Firestore
+            itinerary_id = str(uuid.uuid4())
+            if FIREBASE_AVAILABLE and db:
+                try:
+                    db.collection("itineraries").document(itinerary_id).set({
+                        "user_id": st.session_state.get("user_id", "anonymous"),
+                        "city": city_row['city'],
+                        "country": city_row['country'],
+                        "itinerary_text": cleaned_itinerary,
+                        "user_preferences": full_user_input,
+                        "created_at": firestore.SERVER_TIMESTAMP,
+                        "session_id": st.session_state.get("session_id", "unknown")
+                    })
+                except Exception as e:
+                    print(f"Error saving itinerary to Firebase: {str(e)}")
+            
             st.session_state.current_itinerary = cleaned_itinerary
             st.session_state.current_city = city_row
             st.session_state.current_user_input = full_user_input
+            st.session_state.current_itinerary_id = itinerary_id
             
             # CACHE ITINERARY
             st.session_state.cached_itineraries[selected_city] = cleaned_itinerary
@@ -2553,6 +2673,7 @@ def itinerary_page():
         # =========================
         st.markdown("---")
         st.markdown("### Rate This Itinerary")
+        st.info(f"📌 Share feedback with itinerary ID: `{st.session_state.current_itinerary_id[:12]}...`")
         
         itinerary_rating = st.slider(
             "How would you rate this itinerary?",
@@ -2562,24 +2683,34 @@ def itinerary_page():
             key="itinerary_rating_slider"
         )
         
-        itinerary_feedback_text = st.text_input(
+        itinerary_feedback_text = st.text_area(
             "Additional comments (optional):",
             placeholder="What did you like or what could be improved?",
+            height=100,
             key="itinerary_feedback_text"
         )
         
-        if st.button("Submit Itinerary Feedback", type="secondary", use_container_width=True, key="submit_itinerary_feedback_btn"):
-            success = save_feedback_to_firebase(
-                module="itinerary",
-                feedback_type="rating",
-                target=selected_city,
-                value=itinerary_rating,
-                metadata={"text": itinerary_feedback_text}
-            )
-            if success:
-                st.success("Thank you for your feedback!")
-            else:
-                st.warning("Could not save feedback. Please ensure you are logged in.")
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if st.button("Submit Itinerary Feedback", type="secondary", use_container_width=True, key="submit_itinerary_feedback_btn"):
+                success = save_feedback_to_firebase(
+                    module="itinerary",
+                    feedback_type="rating",
+                    target=selected_city,
+                    value=itinerary_rating,
+                    metadata={
+                        "text": itinerary_feedback_text,
+                        "itinerary_id": st.session_state.current_itinerary_id
+                    }
+                )
+                if success:
+                    st.success("Thank you for your feedback!")
+                else:
+                    st.warning("Could not save feedback. Please ensure you are logged in.")
+        
+        with col2:
+            st.info("Tip: Users can access your itinerary link from the PDF to provide feedback anytime!")
 
 def video_page():
     st.title("🎬 Travel Video Generator")
