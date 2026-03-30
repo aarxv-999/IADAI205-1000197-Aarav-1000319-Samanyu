@@ -1,5 +1,9 @@
 # AI-Powered Cultural Tourism Recommendation & Itinerary Platform
 
+## Streamlit Link
+https://iadai205-1000197-aarav-1000319-samanyu-6uacpjz2ohvgthmen6gbj4.streamlit.app/
+
+
 ## Problem Statement
 Often, tourists face struggles to plan their trips which are truly aligned with their personal interests, weather preferences, season, accessibility needs as well as budget. Most of the current travel platforms provide generic recommendations that don't consider a lot of parameters and are really fundamental. Resultantly, the traveler ends up spending a lot of unnecessary time researching their destinations just to still receive incomplete and irrelevant suggestions. <br/>
 
